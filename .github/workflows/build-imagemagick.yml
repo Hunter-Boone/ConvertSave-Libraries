@@ -1,0 +1,308 @@
+name: Build ImageMagick
+
+on:
+  workflow_dispatch:
+    inputs:
+      imagemagick-version:
+        description: 'ImageMagick version to build (e.g., 7.1.1-39)'
+        required: true
+        default: '7.1.1-39'
+      release-tag:
+        description: 'Release tag name (e.g., v1.0.0)'
+        required: true
+  schedule:
+    # Run monthly to check for updates
+    - cron: '0 0 1 * *'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release-tag: ${{ steps.version.outputs.release-tag }}
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.imagemagick-version }}" >> $GITHUB_OUTPUT
+            echo "release-tag=${{ github.event.inputs.release-tag }}" >> $GITHUB_OUTPUT
+          else
+            # Fetch latest version from ImageMagick website
+            LATEST=$(curl -s https://imagemagick.org/archive/binaries/ | grep -oP 'ImageMagick-\K[0-9]+\.[0-9]+\.[0-9]+-[0-9]+' | head -1)
+            echo "version=$LATEST" >> $GITHUB_OUTPUT
+            echo "release-tag=v$LATEST" >> $GITHUB_OUTPUT
+          fi
+
+  build-macos:
+    needs: prepare
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install pkg-config libtool autoconf automake
+          brew install jpeg libpng libtiff libheif webp
+
+      - name: Download ImageMagick source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          curl -L -o imagemagick.tar.gz "https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          tar xzf imagemagick.tar.gz
+          mv ImageMagick-${VERSION} imagemagick-src
+
+      - name: Configure ImageMagick
+        run: |
+          cd imagemagick-src
+          
+          # Set architecture-specific flags
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            export CFLAGS="-arch arm64"
+            export LDFLAGS="-arch arm64"
+          else
+            export CFLAGS="-arch x86_64"
+            export LDFLAGS="-arch x86_64"
+          fi
+          
+          ./configure \
+            --prefix=$PWD/../imagemagick-build \
+            --with-quantum-depth=16 \
+            --enable-hdri \
+            --with-modules \
+            --with-jpeg \
+            --with-png \
+            --with-tiff \
+            --with-webp \
+            --with-heic \
+            --without-x \
+            --disable-static \
+            --enable-shared \
+            --disable-dependency-tracking
+
+      - name: Build ImageMagick
+        run: |
+          cd imagemagick-src
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Install ImageMagick
+        run: |
+          cd imagemagick-src
+          make install
+
+      - name: Package ImageMagick
+        run: |
+          cd imagemagick-build
+          
+          # Create clean directory structure
+          mkdir -p package/bin package/lib
+          
+          # Copy binaries
+          cp bin/magick package/bin/
+          
+          # Copy libraries and fix install names
+          cp -r lib/*.dylib package/lib/ || true
+          cp -r lib/ImageMagick-* package/lib/ || true
+          
+          # Fix library paths to be relative
+          for dylib in package/lib/*.dylib; do
+            if [ -f "$dylib" ]; then
+              # Change library ID to @rpath
+              install_name_tool -id "@rpath/$(basename $dylib)" "$dylib"
+              
+              # Fix dependencies to use @rpath
+              for dep in $(otool -L "$dylib" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System'); do
+                install_name_tool -change "$dep" "@rpath/$(basename $dep)" "$dylib" || true
+              done
+            fi
+          done
+          
+          # Fix magick binary to use @rpath
+          for dep in $(otool -L package/bin/magick | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System'); do
+            install_name_tool -change "$dep" "@rpath/$(basename $dep)" package/bin/magick || true
+          done
+          
+          # Add @rpath to magick binary
+          install_name_tool -add_rpath "@executable_path/../lib" package/bin/magick
+          
+          # Create tarball
+          cd package
+          tar czf ../../imagemagick-macos-${{ matrix.arch }}.tar.gz .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagemagick-macos-${{ matrix.arch }}
+          path: imagemagick-macos-${{ matrix.arch }}.tar.gz
+
+  build-windows:
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-libjpeg-turbo
+            mingw-w64-x86_64-libpng
+            mingw-w64-x86_64-libtiff
+            mingw-w64-x86_64-libwebp
+            mingw-w64-x86_64-libheif
+            mingw-w64-x86_64-pkg-config
+
+      - name: Download and build ImageMagick
+        shell: msys2 {0}
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          curl -L -o imagemagick.tar.gz "https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          tar xzf imagemagick.tar.gz
+          mv ImageMagick-${VERSION} imagemagick-src
+          
+          cd imagemagick-src
+          
+          ./configure \
+            --prefix=/c/imagemagick-build \
+            --with-quantum-depth=16 \
+            --enable-hdri \
+            --with-modules \
+            --with-jpeg \
+            --with-png \
+            --with-tiff \
+            --with-webp \
+            --with-heic \
+            --disable-static \
+            --enable-shared
+          
+          make -j$(nproc)
+          make install
+
+      - name: Package ImageMagick
+        shell: msys2 {0}
+        run: |
+          cd /c/imagemagick-build
+          
+          mkdir -p package
+          cp -r bin package/
+          cp -r lib package/
+          
+          # Copy required DLLs from MSYS2
+          MINGW_BIN="/mingw64/bin"
+          for dll in libMagickCore-*.dll libMagickWand-*.dll libgcc_s*.dll libstdc++*.dll libwinpthread*.dll; do
+            cp $MINGW_BIN/$dll package/bin/ 2>/dev/null || true
+          done
+          
+          cd package
+          7z a -tzip ../imagemagick-windows-x64.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagemagick-windows-x64
+          path: C:\imagemagick-build\imagemagick-windows-x64.zip
+
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libjpeg-dev \
+            libpng-dev \
+            libtiff-dev \
+            libwebp-dev \
+            libheif-dev
+
+      - name: Download ImageMagick source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          curl -L -o imagemagick.tar.gz "https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          tar xzf imagemagick.tar.gz
+          mv ImageMagick-${VERSION} imagemagick-src
+
+      - name: Build ImageMagick
+        run: |
+          cd imagemagick-src
+          
+          ./configure \
+            --prefix=$PWD/../imagemagick-build \
+            --with-quantum-depth=16 \
+            --enable-hdri \
+            --with-modules \
+            --with-jpeg \
+            --with-png \
+            --with-tiff \
+            --with-webp \
+            --with-heic \
+            --disable-static \
+            --enable-shared
+          
+          make -j$(nproc)
+          make install
+
+      - name: Package ImageMagick
+        run: |
+          cd imagemagick-build
+          tar czf ../imagemagick-linux-x64.tar.gz .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagemagick-linux-x64
+          path: imagemagick-linux-x64.tar.gz
+
+  create-release:
+    needs: [prepare, build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -R artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare.outputs.release-tag }}
+          name: ImageMagick ${{ needs.prepare.outputs.version }}
+          body: |
+            ImageMagick ${{ needs.prepare.outputs.version }} built for ConvertSave
+            
+            ## Builds included:
+            - macOS (x86_64 and arm64)
+            - Windows (x64)
+            - Linux (x64)
+            
+            All builds include:
+            - Quantum depth: 16
+            - HDRI enabled
+            - JPEG, PNG, TIFF, WebP, HEIC support
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

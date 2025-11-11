@@ -1,0 +1,16 @@
+# Build artifacts
+*.tar.gz
+*.zip
+*.7z
+imagemagick-src/
+imagemagick-build/
+ffmpeg-src/
+ffmpeg-build/
+
+# macOS
+.DS_Store
+
+# Temp files
+*.tmp
+*.log
+
