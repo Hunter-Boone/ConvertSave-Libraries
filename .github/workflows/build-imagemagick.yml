@@ -69,8 +69,8 @@ jobs:
           # Install build tools
           brew install pkg-config libtool autoconf automake
           
-          # Install image format libraries (only pure C libraries for better compatibility)
-          brew install jpeg libpng libtiff webp
+          # Install image format libraries
+          brew install jpeg libpng libtiff libheif webp jpeg-xl
           
           # Verify libtool installation (provides libltdl)
           brew list libtool
@@ -99,19 +99,26 @@ jobs:
         run: |
           cd imagemagick-src
           
+          # Set minimum deployment target for backward compatibility
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          
           # Set up paths for Homebrew libraries (different for Intel vs ARM)
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            export CFLAGS="-arch arm64 -I/opt/homebrew/include"
-            export LDFLAGS="-arch arm64 -L/opt/homebrew/lib"
+            export CFLAGS="-arch arm64 -mmacosx-version-min=11.0 -I/opt/homebrew/include"
+            export LDFLAGS="-arch arm64 -mmacosx-version-min=11.0 -L/opt/homebrew/lib"
+            export CXXFLAGS="-arch arm64 -mmacosx-version-min=11.0 -I/opt/homebrew/include"
             export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/libtool/lib/pkgconfig"
           else
-            export CFLAGS="-arch x86_64 -I/usr/local/include"
-            export LDFLAGS="-arch x86_64 -L/usr/local/lib"
+            export CFLAGS="-arch x86_64 -mmacosx-version-min=11.0 -I/usr/local/include"
+            export LDFLAGS="-arch x86_64 -mmacosx-version-min=11.0 -L/usr/local/lib"
+            export CXXFLAGS="-arch x86_64 -mmacosx-version-min=11.0 -I/usr/local/include"
             export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/opt/libtool/lib/pkgconfig"
           fi
           
           # Display environment for debugging
+          echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
           echo "CFLAGS: $CFLAGS"
+          echo "CXXFLAGS: $CXXFLAGS"
           echo "LDFLAGS: $LDFLAGS"
           echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
           
@@ -124,10 +131,10 @@ jobs:
             --with-png \
             --with-tiff \
             --with-webp \
-            --without-heic \
-            --without-jxl \
+            --with-heic \
+            --with-jxl \
             --without-x \
-            --disable-static \
+            --enable-static \
             --enable-shared \
             --disable-dependency-tracking
 
@@ -241,6 +248,15 @@ jobs:
           # List all libraries we're bundling
           echo "=== Bundled libraries ==="
           ls -lh package/lib/*.dylib
+          
+          # Strip and codesign libraries for better compatibility
+          echo "=== Processing libraries for compatibility ==="
+          for dylib in package/lib/*.dylib; do
+            if [ -f "$dylib" ]; then
+              # Remove code signature (will be re-signed by macOS when loaded)
+              codesign --remove-signature "$dylib" 2>/dev/null || true
+            fi
+          done
           
           # Fix library paths to use @rpath
           echo "=== Fixing library paths ==="
@@ -395,10 +411,10 @@ jobs:
             ### macOS Features:
             - Quantum depth: 16
             - HDRI enabled
-            - Format support: JPEG, PNG, TIFF, WebP, GIF, BMP, and more
-            - All sub-libraries bundled (libjpeg, libpng, libtiff, libwebp, etc.)
+            - Format support: JPEG, PNG, TIFF, WebP, HEIC, AVIF, JPEG XL, GIF, BMP, and more
+            - All sub-libraries bundled (libjpeg, libpng, libtiff, libwebp, libheif, libjxl, etc.)
             - Uses @rpath for relocatable binaries
-            - Pure C libraries only (no C++ dependencies for better compatibility)
+            - Built with deployment target 11.0 for backward compatibility
             
             ### For Windows:
             Download from [ImageMagick.org](https://imagemagick.org/script/download.php#windows)
