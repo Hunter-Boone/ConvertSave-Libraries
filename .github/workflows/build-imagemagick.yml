@@ -70,7 +70,7 @@ jobs:
           brew install pkg-config libtool autoconf automake
           
           # Install image format libraries
-          brew install jpeg libpng libtiff libheif webp
+          brew install jpeg libpng libtiff libheif webp jpeg-xl
           
           # Verify libtool installation (provides libltdl)
           brew list libtool
