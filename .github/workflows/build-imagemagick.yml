@@ -154,10 +154,14 @@ jobs:
           cp -r lib/*.dylib package/lib/ || true
           cp -r lib/ImageMagick-* package/lib/ || true
           
-          # Copy configuration files if they exist
+          # Copy configuration files
+          echo "=== Checking for configuration files ==="
           if [ -d etc/ImageMagick-7 ]; then
-            echo "Copying ImageMagick configuration files..."
+            echo "Copying ImageMagick configuration files from etc/ImageMagick-7..."
             cp -r etc/ImageMagick-7 package/etc/
+            ls -la package/etc/ImageMagick-7/
+          else
+            echo "WARNING: etc/ImageMagick-7 not found"
           fi
           
           # Copy shared files if they exist
@@ -166,6 +170,11 @@ jobs:
             mkdir -p package/share
             cp -r share/ImageMagick-7 package/share/
           fi
+          
+          echo "=== Package structure ==="
+          find package -type d | head -20
+          echo "=== Configuration files ==="
+          find package/etc -type f 2>/dev/null || echo "No etc directory"
           
           # Function to recursively copy all dylib dependencies
           copy_deps() {
