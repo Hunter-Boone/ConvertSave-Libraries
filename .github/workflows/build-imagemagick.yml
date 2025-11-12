@@ -331,7 +331,7 @@ jobs:
   #   ...
 
   build-macos-legacy:
-    # Build old version 7.0.10-42 (from 2020) for compatibility testing
+    # Build older version 7.1.0-0 (from 2021) for compatibility testing
     # Single build on macOS 13 (x86_64) - works on both Intel and newer ARM Macs
     runs-on: macos-13
     steps:
@@ -351,9 +351,9 @@ jobs:
           brew list libtool
           ls -la /opt/homebrew/opt/libtool/lib/ 2>/dev/null || ls -la /usr/local/opt/libtool/lib/
 
-      - name: Download ImageMagick 7.0.10-42 source
+      - name: Download ImageMagick 7.1.0-0 source
         run: |
-          VERSION="7.0.10-42"
+          VERSION="7.1.0-0"
           DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.xz"
           
           echo "Downloading ImageMagick ${VERSION} from: $DOWNLOAD_URL"
@@ -370,7 +370,7 @@ jobs:
           mv ImageMagick-${VERSION} imagemagick-src
           echo "✓ Source code ready"
 
-      - name: Configure ImageMagick 7.0.10-42
+      - name: Configure ImageMagick 7.1.0-0
         run: |
           cd imagemagick-src
           
@@ -423,12 +423,12 @@ jobs:
             --enable-delegate-build \
             --disable-dependency-tracking
 
-      - name: Build ImageMagick 7.0.10-42
+      - name: Build ImageMagick 7.1.0-0
         run: |
           cd imagemagick-src
           make -j$(sysctl -n hw.ncpu)
 
-      - name: Install ImageMagick 7.0.10-42
+      - name: Install ImageMagick 7.1.0-0
         run: |
           cd imagemagick-src
           make install
@@ -436,7 +436,7 @@ jobs:
       - name: Verify HEIC support
         run: |
           cd imagemagick-build
-          echo "=== Verifying ImageMagick 7.0.10-42 HEIC support ==="
+          echo "=== Verifying ImageMagick 7.1.0-0 HEIC support ==="
           if bin/magick identify -list format | grep -i heic; then
             echo "✅ HEIC support confirmed!"
           else
@@ -444,7 +444,7 @@ jobs:
             exit 1
           fi
 
-      - name: Package ImageMagick 7.0.10-42
+      - name: Package ImageMagick 7.1.0-0
         run: |
           cd imagemagick-build
           
@@ -579,13 +579,13 @@ jobs:
           
           # Create tarball with version in filename
           cd package
-          tar czf ../../imagemagick-7.0.10-42-macos-x86_64.tar.gz .
+          tar czf ../../imagemagick-7.1.0-0-macos-x86_64.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: imagemagick-legacy-7.0.10-42-macos13-x86_64
-          path: imagemagick-7.0.10-42-macos-x86_64.tar.gz
+          name: imagemagick-legacy-7.1.0-0-macos13-x86_64
+          path: imagemagick-7.1.0-0-macos-x86_64.tar.gz
           retention-days: 30
 
   build-linux:
@@ -713,7 +713,7 @@ jobs:
           done
           
           # Move legacy builds to root (they already have version in filename)
-          for file in imagemagick-legacy-*/imagemagick-7.0.10-42-*.tar.gz; do
+          for file in imagemagick-legacy-*/imagemagick-7.1.0-0-*.tar.gz; do
             if [ -f "$file" ]; then
               newname=$(basename "$file")
               mv "$file" "$newname"
@@ -786,9 +786,9 @@ jobs:
             - Built on GitHub Actions with all dependencies bundled
             - **Your app will auto-download these on macOS 13+**
             
-            ### Legacy Version (7.0.10-42 from 2020) 🕰️:
-            - `imagemagick-7.0.10-42-macos-x86_64.tar.gz` - Intel build (works on both Intel and ARM)
-            - Old stable version for compatibility testing
+            ### Legacy Version (7.1.0-0 from 2021) 🕰️:
+            - `imagemagick-7.1.0-0-macos-x86_64.tar.gz` - Intel build (works on both Intel and ARM)
+            - Older stable version for compatibility testing
             - Same comprehensive format support as latest builds
             - Single build for simplicity
             
