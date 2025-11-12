@@ -332,10 +332,8 @@ jobs:
 
   build-macos-legacy:
     # Build old version 7.0.10-42 (from 2020) for compatibility testing
-    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-latest' }}
-    strategy:
-      matrix:
-        arch: [x86_64, arm64]
+    # Single build on macOS 13 (x86_64) - works on both Intel and newer ARM Macs
+    runs-on: macos-13
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -379,14 +377,9 @@ jobs:
           # Set minimum deployment target for backward compatibility
           export MACOSX_DEPLOYMENT_TARGET=11.0
           
-          # Set up paths for Homebrew libraries
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            BREW_PREFIX="/opt/homebrew"
-            ARCH_FLAGS="-arch arm64"
-          else
-            BREW_PREFIX="/usr/local"
-            ARCH_FLAGS="-arch x86_64"
-          fi
+          # Set up paths for Homebrew libraries (macOS 13 Intel runner)
+          BREW_PREFIX="/usr/local"
+          ARCH_FLAGS="-arch x86_64"
           
           export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
           export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
@@ -498,12 +491,8 @@ jobs:
             local indent=$(printf '%*s' $((level * 2)) '')
             echo "${indent}Processing: $(basename $binary)"
             
-            # Determine Homebrew prefix based on architecture
-            if [ "${{ matrix.arch }}" = "arm64" ]; then
-              BREW_PREFIX="/opt/homebrew"
-            else
-              BREW_PREFIX="/usr/local"
-            fi
+            # Homebrew prefix for macOS 13 Intel runner
+            BREW_PREFIX="/usr/local"
             
             # Get all dylib dependencies (excluding system libraries)
             otool -L "$binary" 2>/dev/null | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
@@ -590,13 +579,13 @@ jobs:
           
           # Create tarball with version in filename
           cd package
-          tar czf ../../imagemagick-7.0.10-42-macos-${{ matrix.arch }}.tar.gz .
+          tar czf ../../imagemagick-7.0.10-42-macos-x86_64.tar.gz .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: imagemagick-legacy-7.0.10-42-macos13-${{ matrix.arch }}
-          path: imagemagick-7.0.10-42-macos-${{ matrix.arch }}.tar.gz
+          name: imagemagick-legacy-7.0.10-42-macos13-x86_64
+          path: imagemagick-7.0.10-42-macos-x86_64.tar.gz
           retention-days: 30
 
   build-linux:
@@ -797,11 +786,11 @@ jobs:
             - Built on GitHub Actions with all dependencies bundled
             - **Your app will auto-download these on macOS 13+**
             
-            ### macOS 13+ - Legacy Version (7.0.10-42 from 2020) 🕰️:
-            - `imagemagick-7.0.10-42-macos-x86_64.tar.gz` - Intel Macs
-            - `imagemagick-7.0.10-42-macos-arm64.tar.gz` - Apple Silicon
+            ### Legacy Version (7.0.10-42 from 2020) 🕰️:
+            - `imagemagick-7.0.10-42-macos-x86_64.tar.gz` - Intel build (works on both Intel and ARM)
             - Old stable version for compatibility testing
             - Same comprehensive format support as latest builds
+            - Single build for simplicity
             
             ### Linux:
             - `imagemagick-linux-x64.tar.gz`
