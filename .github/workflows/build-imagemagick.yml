@@ -53,7 +53,7 @@ jobs:
 
   build-macos:
     needs: prepare
-    runs-on: macos-latest
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-latest' }}
     strategy:
       matrix:
         arch: [x86_64, arm64]
@@ -63,8 +63,15 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Install build tools
           brew install pkg-config libtool autoconf automake
+          
+          # Install image format libraries
           brew install jpeg libpng libtiff libheif webp
+          
+          # Verify libtool installation (provides libltdl)
+          brew list libtool
+          ls -la /opt/homebrew/opt/libtool/lib/ 2>/dev/null || ls -la /usr/local/opt/libtool/lib/
 
       - name: Download ImageMagick source
         run: |
@@ -89,14 +96,21 @@ jobs:
         run: |
           cd imagemagick-src
           
-          # Set architecture-specific flags
+          # Set up paths for Homebrew libraries (different for Intel vs ARM)
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            export CFLAGS="-arch arm64"
-            export LDFLAGS="-arch arm64"
+            export CFLAGS="-arch arm64 -I/opt/homebrew/include"
+            export LDFLAGS="-arch arm64 -L/opt/homebrew/lib"
+            export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/libtool/lib/pkgconfig"
           else
-            export CFLAGS="-arch x86_64"
-            export LDFLAGS="-arch x86_64"
+            export CFLAGS="-arch x86_64 -I/usr/local/include"
+            export LDFLAGS="-arch x86_64 -L/usr/local/lib"
+            export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/opt/libtool/lib/pkgconfig"
           fi
+          
+          # Display environment for debugging
+          echo "CFLAGS: $CFLAGS"
+          echo "LDFLAGS: $LDFLAGS"
+          echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
           
           ./configure \
             --prefix=$PWD/../imagemagick-build \
