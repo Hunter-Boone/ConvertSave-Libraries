@@ -92,7 +92,7 @@ jobs:
           export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
           export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
           
-          # Clone and build libheif (minimal build - just HEIC decoding)
+          # Clone and build libheif (minimal build - just core library)
           git clone --depth 1 --branch v1.19.5 https://github.com/strukturag/libheif.git
           cd libheif
           mkdir build && cd build
@@ -103,17 +103,26 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
             -DBUILD_SHARED_LIBS=ON \
             -DWITH_EXAMPLES=OFF \
-            -DWITH_JPEG_DECODER=OFF \
-            -DWITH_JPEG_ENCODER=OFF \
+            -DWITH_GDK_PIXBUF=OFF \
             -DWITH_LIBDE265=OFF \
             -DWITH_X265=OFF \
             -DWITH_AOM=OFF \
-            -DWITH_DAV1D=OFF
-          cmake --build . -j$(sysctl -n hw.ncpu)
-          cmake --install .
+            -DWITH_DAV1D=OFF \
+            -DWITH_RAV1E=OFF \
+            -DWITH_SvtEnc=OFF
+          
+          # Only build the core library, skip heifio which has JPEG conflicts
+          cmake --build . --target heif -j$(sysctl -n hw.ncpu)
+          
+          # Manually install just what we need
+          mkdir -p $PWD/../../heif-install/lib
+          mkdir -p $PWD/../../heif-install/include/libheif
+          cp libheif/libheif.* $PWD/../../heif-install/lib/ || cp libheif.* $PWD/../../heif-install/lib/
+          cp ../libheif/*.h $PWD/../../heif-install/include/libheif/
+          
           cd ../..
           
-          echo "✓ libheif built and installed (minimal build for HEIC support)"
+          echo "✓ libheif core library built and installed (without heifio)"
 
       - name: Build libjxl from source for compatibility
         run: |
