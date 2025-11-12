@@ -9,6 +9,7 @@ ConvertSave bundles conversion tools to work offline. This repository builds tho
 ## Libraries
 
 ### ImageMagick
+
 - **Platforms**: macOS (Intel + Apple Silicon), Linux
 - **Features**: Q16, HDRI, HEIC/JPEG/PNG/TIFF/WebP support
 - **macOS**: All dependencies bundled (freetype, jpeg, png, etc.)
@@ -16,6 +17,7 @@ ConvertSave bundles conversion tools to work offline. This repository builds tho
 - **Workflow**: `.github/workflows/build-imagemagick.yml`
 
 ### FFmpeg
+
 - Currently using official pre-built binaries
 - Custom builds can be added if needed
 
@@ -40,18 +42,20 @@ Runs monthly to check for ImageMagick updates.
 The `latest` release tag is automatically updated with each new build. Use this URL pattern in ConvertSave:
 
 ```
-https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-x86_64.tar.gz
-https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-arm64.tar.gz
-https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-linux-x64.tar.gz
+https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-x86_64.tar.gz
+https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-arm64.tar.gz
+https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/latest/imagemagick-linux-x64.tar.gz
 ```
 
 ### Versioned Releases
 
 Specific versions are also available:
+
 - Browse [Releases](../../releases) for specific versions
 - Download `imagemagick-macos-x86_64.tar.gz`, `imagemagick-macos-arm64.tar.gz`, or `imagemagick-linux-x64.tar.gz`
 
 ### Windows
+
 Use [official portable builds](https://imagemagick.org/script/download.php#windows)
 
 ## Platform Notes
@@ -63,6 +67,6 @@ Use [official portable builds](https://imagemagick.org/script/download.php#windo
 ## License
 
 Build scripts are provided as-is. Built binaries follow their respective licenses:
+
 - **ImageMagick**: Apache 2.0
 - **FFmpeg**: LGPL 2.1+ or GPL 2+
-
