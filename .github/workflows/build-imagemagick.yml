@@ -20,19 +20,36 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       release-tag: ${{ steps.version.outputs.release-tag }}
+      download-url: ${{ steps.version.outputs.download-url }}
     steps:
-      - name: Determine version
+      - name: Determine version and download URL
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.imagemagick-version }}" >> $GITHUB_OUTPUT
+            VERSION="${{ github.event.inputs.imagemagick-version }}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "release-tag=${{ github.event.inputs.release-tag }}" >> $GITHUB_OUTPUT
           else
-            # Fetch latest version from ImageMagick website
-            LATEST=$(curl -s https://imagemagick.org/archive/binaries/ | grep -oP 'ImageMagick-\K[0-9]+\.[0-9]+\.[0-9]+-[0-9]+' | head -1)
-            echo "version=$LATEST" >> $GITHUB_OUTPUT
-            echo "release-tag=v$LATEST" >> $GITHUB_OUTPUT
+            # Fetch latest version from ImageMagick releases page
+            echo "Fetching latest ImageMagick version..."
+            VERSION=$(curl -s https://imagemagick.org/archive/releases/ | grep -oP 'ImageMagick-\K[0-9]+\.[0-9]+\.[0-9]+-[0-9]+(?=\.tar\.gz)' | sort -V | tail -1)
+            echo "Found version: $VERSION"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "release-tag=v$VERSION" >> $GITHUB_OUTPUT
           fi
+          
+          # Construct download URL and verify it exists
+          DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          echo "download-url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          echo "Will download from: $DOWNLOAD_URL"
+          
+          # Verify URL exists (HEAD request)
+          if ! curl --head --silent --fail "$DOWNLOAD_URL" > /dev/null; then
+            echo "ERROR: Download URL does not exist: $DOWNLOAD_URL"
+            echo "Available versions at https://imagemagick.org/archive/releases/"
+            exit 1
+          fi
+          echo "✓ Download URL verified"
 
   build-macos:
     needs: prepare
@@ -51,10 +68,22 @@ jobs:
 
       - name: Download ImageMagick source
         run: |
+          DOWNLOAD_URL="${{ needs.prepare.outputs.download-url }}"
           VERSION="${{ needs.prepare.outputs.version }}"
-          curl -L -o imagemagick.tar.gz "https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          
+          echo "Downloading from: $DOWNLOAD_URL"
+          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
+          
+          echo "Verifying download..."
+          if [ ! -f imagemagick.tar.gz ] || [ $(stat -f%z imagemagick.tar.gz 2>/dev/null || stat -c%s imagemagick.tar.gz) -lt 10000 ]; then
+            echo "ERROR: Download failed or file is too small"
+            exit 1
+          fi
+          
+          echo "Extracting..."
           tar xzf imagemagick.tar.gz
           mv ImageMagick-${VERSION} imagemagick-src
+          echo "✓ Source code ready"
 
       - name: Configure ImageMagick
         run: |
@@ -164,8 +193,21 @@ jobs:
       - name: Download and build ImageMagick
         shell: msys2 {0}
         run: |
+          DOWNLOAD_URL="${{ needs.prepare.outputs.download-url }}"
           VERSION="${{ needs.prepare.outputs.version }}"
-          curl -L -o imagemagick.tar.gz "https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          
+          echo "Downloading from: $DOWNLOAD_URL"
+          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
+          
+          echo "Verifying download..."
+          FILE_SIZE=$(stat -c%s imagemagick.tar.gz)
+          if [ ! -f imagemagick.tar.gz ] || [ $FILE_SIZE -lt 10000 ]; then
+            echo "ERROR: Download failed or file is too small ($FILE_SIZE bytes)"
+            exit 1
+          fi
+          echo "Downloaded $FILE_SIZE bytes"
+          
+          echo "Extracting..."
           tar xzf imagemagick.tar.gz
           mv ImageMagick-${VERSION} imagemagick-src
           
@@ -232,10 +274,24 @@ jobs:
 
       - name: Download ImageMagick source
         run: |
+          DOWNLOAD_URL="${{ needs.prepare.outputs.download-url }}"
           VERSION="${{ needs.prepare.outputs.version }}"
-          curl -L -o imagemagick.tar.gz "https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          
+          echo "Downloading from: $DOWNLOAD_URL"
+          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
+          
+          echo "Verifying download..."
+          FILE_SIZE=$(stat -c%s imagemagick.tar.gz)
+          if [ ! -f imagemagick.tar.gz ] || [ $FILE_SIZE -lt 10000 ]; then
+            echo "ERROR: Download failed or file is too small ($FILE_SIZE bytes)"
+            exit 1
+          fi
+          echo "Downloaded $FILE_SIZE bytes"
+          
+          echo "Extracting..."
           tar xzf imagemagick.tar.gz
           mv ImageMagick-${VERSION} imagemagick-src
+          echo "✓ Source code ready"
 
       - name: Build ImageMagick
         run: |
