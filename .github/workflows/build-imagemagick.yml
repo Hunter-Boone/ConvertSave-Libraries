@@ -333,6 +333,7 @@ jobs:
             build-essential \
             pkg-config \
             libtool \
+            libltdl-dev \
             autoconf \
             automake \
             libjpeg-dev \
