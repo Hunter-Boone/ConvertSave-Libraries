@@ -147,30 +147,78 @@ jobs:
           # Copy binaries
           cp bin/magick package/bin/
           
-          # Copy libraries and fix install names
+          # Copy ImageMagick libraries
           cp -r lib/*.dylib package/lib/ || true
           cp -r lib/ImageMagick-* package/lib/ || true
           
-          # Fix library paths to be relative
+          # Function to recursively copy all dylib dependencies
+          copy_deps() {
+            local binary="$1"
+            echo "Processing dependencies for: $binary"
+            
+            # Get all dylib dependencies (excluding system libraries)
+            otool -L "$binary" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+              local dep_name=$(basename "$dep")
+              local dest="package/lib/$dep_name"
+              
+              # Copy if not already present
+              if [ ! -f "$dest" ] && [ -f "$dep" ]; then
+                echo "  Copying dependency: $dep_name"
+                cp "$dep" "$dest"
+                
+                # Recursively process this dependency's dependencies
+                copy_deps "$dest"
+              fi
+            done
+          }
+          
+          # Copy all dependencies for magick binary
+          echo "=== Copying dependencies for magick binary ==="
+          copy_deps "package/bin/magick"
+          
+          # Copy all dependencies for ImageMagick dylibs
+          echo "=== Copying dependencies for ImageMagick libraries ==="
           for dylib in package/lib/*.dylib; do
             if [ -f "$dylib" ]; then
+              copy_deps "$dylib"
+            fi
+          done
+          
+          # List all libraries we're bundling
+          echo "=== Bundled libraries ==="
+          ls -lh package/lib/*.dylib
+          
+          # Fix library paths to use @rpath
+          echo "=== Fixing library paths ==="
+          for dylib in package/lib/*.dylib; do
+            if [ -f "$dylib" ]; then
+              echo "Fixing: $(basename $dylib)"
+              
               # Change library ID to @rpath
               install_name_tool -id "@rpath/$(basename $dylib)" "$dylib"
               
-              # Fix dependencies to use @rpath
-              for dep in $(otool -L "$dylib" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System'); do
-                install_name_tool -change "$dep" "@rpath/$(basename $dep)" "$dylib" || true
+              # Fix all dependencies to use @rpath
+              otool -L "$dylib" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+                install_name_tool -change "$dep" "@rpath/$(basename $dep)" "$dylib" 2>/dev/null || true
               done
             fi
           done
           
           # Fix magick binary to use @rpath
-          for dep in $(otool -L package/bin/magick | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System'); do
-            install_name_tool -change "$dep" "@rpath/$(basename $dep)" package/bin/magick || true
+          echo "=== Fixing magick binary paths ==="
+          otool -L package/bin/magick | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+            install_name_tool -change "$dep" "@rpath/$(basename $dep)" package/bin/magick 2>/dev/null || true
           done
           
           # Add @rpath to magick binary
           install_name_tool -add_rpath "@executable_path/../lib" package/bin/magick
+          
+          # Verify the binary can find its libraries
+          echo "=== Verifying magick binary ==="
+          otool -L package/bin/magick
+          
+          echo "=== Sample library dependencies ==="
+          otool -L package/lib/libMagickCore-7.Q16HDRI.dylib | head -20
           
           # Create tarball
           cd package
@@ -197,6 +245,9 @@ jobs:
           install: >-
             base-devel
             mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-libtool
+            mingw-w64-x86_64-autoconf
+            mingw-w64-x86_64-automake
             mingw-w64-x86_64-libjpeg-turbo
             mingw-w64-x86_64-libpng
             mingw-w64-x86_64-libtiff
@@ -280,6 +331,9 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            libtool \
+            autoconf \
+            automake \
             libjpeg-dev \
             libpng-dev \
             libtiff-dev \
