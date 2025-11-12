@@ -145,7 +145,7 @@ jobs:
           cd imagemagick-build
           
           # Create clean directory structure
-          mkdir -p package/bin package/lib
+          mkdir -p package/bin package/lib package/etc
           
           # Copy binaries
           cp bin/magick package/bin/
@@ -153,6 +153,19 @@ jobs:
           # Copy ImageMagick libraries
           cp -r lib/*.dylib package/lib/ || true
           cp -r lib/ImageMagick-* package/lib/ || true
+          
+          # Copy configuration files if they exist
+          if [ -d etc/ImageMagick-7 ]; then
+            echo "Copying ImageMagick configuration files..."
+            cp -r etc/ImageMagick-7 package/etc/
+          fi
+          
+          # Copy shared files if they exist
+          if [ -d share/ImageMagick-7 ]; then
+            echo "Copying ImageMagick shared files..."
+            mkdir -p package/share
+            cp -r share/ImageMagick-7 package/share/
+          fi
           
           # Function to recursively copy all dylib dependencies
           copy_deps() {
