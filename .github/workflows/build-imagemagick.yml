@@ -183,6 +183,13 @@ jobs:
             local indent=$(printf '%*s' $((level * 2)) '')
             echo "${indent}Processing: $(basename $binary)"
             
+            # Determine Homebrew prefix based on architecture
+            if [ "${{ matrix.arch }}" = "arm64" ]; then
+              BREW_PREFIX="/opt/homebrew"
+            else
+              BREW_PREFIX="/usr/local"
+            fi
+            
             # Get all dylib dependencies (excluding system libraries)
             otool -L "$binary" 2>/dev/null | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
               local dep_name=$(basename "$dep")
@@ -190,14 +197,26 @@ jobs:
               
               # Copy if not already present
               if [ ! -f "$dest" ]; then
+                # Try the exact path first
                 if [ -f "$dep" ]; then
-                  echo "${indent}  → Copying: $dep_name"
+                  echo "${indent}  → Copying: $dep_name (from $dep)"
                   cp "$dep" "$dest"
-                  
-                  # Recursively process this dependency's dependencies
                   copy_deps "$dest" $((level + 1))
+                # If exact path doesn't exist, search in Homebrew
+                elif [ -f "$BREW_PREFIX/lib/$dep_name" ]; then
+                  echo "${indent}  → Copying: $dep_name (from Homebrew)"
+                  cp "$BREW_PREFIX/lib/$dep_name" "$dest"
+                  copy_deps "$dest" $((level + 1))
+                # Try searching in Cellar for versioned libraries
                 else
-                  echo "${indent}  ⚠ Not found: $dep"
+                  local found_path=$(find "$BREW_PREFIX/Cellar" -name "$dep_name" 2>/dev/null | head -1)
+                  if [ -n "$found_path" ] && [ -f "$found_path" ]; then
+                    echo "${indent}  → Copying: $dep_name (from $found_path)"
+                    cp "$found_path" "$dest"
+                    copy_deps "$dest" $((level + 1))
+                  else
+                    echo "${indent}  ⚠ Not found: $dep_name (searched: $dep, $BREW_PREFIX/lib, Cellar)"
+                  fi
                 fi
               fi
             done
