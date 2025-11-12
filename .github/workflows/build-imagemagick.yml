@@ -134,7 +134,15 @@ jobs:
           # Clone and build libjxl
           git clone --depth 1 --branch v0.11.1 https://github.com/libjxl/libjxl.git
           cd libjxl
-          git submodule update --init --recursive --depth 1
+          
+          # Initialize submodules but skip problematic ones
+          git submodule update --init --recursive --depth 1 || true
+          
+          # Fix CMake version requirement in sjpeg if it exists
+          if [ -f "third_party/sjpeg/CMakeLists.txt" ]; then
+            sed -i.bak 's/cmake_minimum_required(VERSION 2.8.12)/cmake_minimum_required(VERSION 3.5)/' third_party/sjpeg/CMakeLists.txt
+          fi
+          
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
@@ -145,7 +153,8 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DJPEGXL_ENABLE_TOOLS=OFF \
             -DJPEGXL_ENABLE_VIEWERS=OFF \
-            -DJPEGXL_ENABLE_PLUGINS=OFF
+            -DJPEGXL_ENABLE_PLUGINS=OFF \
+            -DJPEGXL_ENABLE_SJPEG=OFF
           cmake --build . -j$(sysctl -n hw.ncpu)
           cmake --install .
           cd ../..
