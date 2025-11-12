@@ -70,7 +70,8 @@ jobs:
           brew install pkg-config libtool autoconf automake
           
           # Install image format libraries
-          brew install jpeg libpng libtiff webp libheif
+          # Note: Excluding libheif to avoid libx265 dependency which is incompatible with macOS 11
+          brew install jpeg libpng libtiff webp
           
           # Verify libtool installation (provides libltdl)
           brew list libtool
@@ -132,7 +133,7 @@ jobs:
             --with-png \
             --with-tiff \
             --with-webp \
-            --with-heic \
+            --without-heic \
             --without-jxl \
             --without-x \
             --disable-static \
@@ -319,8 +320,7 @@ jobs:
             libjpeg-dev \
             libpng-dev \
             libtiff-dev \
-            libwebp-dev \
-            libheif-dev
+            libwebp-dev
 
       - name: Download ImageMagick source
         run: |
@@ -356,7 +356,7 @@ jobs:
             --with-png \
             --with-tiff \
             --with-webp \
-            --with-heic \
+            --without-heic \
             --disable-static \
             --enable-shared
           
@@ -403,11 +403,11 @@ jobs:
             ### macOS Features:
             - Quantum depth: 16
             - HDRI enabled
-            - Format support: JPEG, PNG, TIFF, WebP, HEIC, GIF, BMP, and more
-            - All sub-libraries bundled (libjpeg, libpng, libtiff, libwebp, libheif, etc.)
+            - Format support: JPEG, PNG, TIFF, WebP, GIF, BMP, and more
+            - All sub-libraries bundled (libjpeg, libpng, libtiff, libwebp, etc.)
             - Uses @rpath for relocatable binaries
             - Built with deployment target 11.0 for backward compatibility
-            - Note: JPEG XL support excluded to avoid build complexity
+            - Note: HEIC and JPEG XL support excluded for macOS 11 compatibility
             
             ### For Windows:
             Download from [ImageMagick.org](https://imagemagick.org/script/download.php#windows)
