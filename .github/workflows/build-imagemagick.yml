@@ -67,14 +67,88 @@ jobs:
       - name: Install dependencies
         run: |
           # Install build tools
-          brew install pkg-config libtool autoconf automake
+          brew install pkg-config libtool autoconf automake cmake ninja nasm
           
-          # Install image format libraries
-          brew install jpeg libpng libtiff libheif webp jpeg-xl
+          # Install basic image format libraries (pure C, no compatibility issues)
+          brew install jpeg libpng libtiff webp
           
           # Verify libtool installation (provides libltdl)
           brew list libtool
           ls -la /opt/homebrew/opt/libtool/lib/ 2>/dev/null || ls -la /usr/local/opt/libtool/lib/
+
+      - name: Build libheif from source for compatibility
+        run: |
+          # Set deployment target and arch-specific paths
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            BREW_PREFIX="/opt/homebrew"
+            ARCH_FLAGS="-arch arm64"
+          else
+            BREW_PREFIX="/usr/local"
+            ARCH_FLAGS="-arch x86_64"
+          fi
+          
+          export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
+          export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
+          export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
+          
+          # Clone and build libheif (without video codecs to avoid C++ compatibility issues)
+          git clone --depth 1 --branch v1.19.5 https://github.com/strukturag/libheif.git
+          cd libheif
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=$PWD/../../heif-install \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+            -DBUILD_SHARED_LIBS=ON \
+            -DWITH_EXAMPLES=OFF \
+            -DWITH_LIBDE265=OFF \
+            -DWITH_X265=OFF \
+            -DWITH_AOM=OFF \
+            -DWITH_DAV1D=OFF
+          cmake --build . -j$(sysctl -n hw.ncpu)
+          cmake --install .
+          cd ../..
+          
+          echo "✓ libheif built and installed (without video codecs)"
+
+      - name: Build libjxl from source for compatibility
+        run: |
+          # Set deployment target and arch-specific paths
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            BREW_PREFIX="/opt/homebrew"
+            ARCH_FLAGS="-arch arm64"
+          else
+            BREW_PREFIX="/usr/local"
+            ARCH_FLAGS="-arch x86_64"
+          fi
+          
+          export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
+          export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
+          export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
+          
+          # Clone and build libjxl
+          git clone --depth 1 --branch v0.11.1 https://github.com/libjxl/libjxl.git
+          cd libjxl
+          git submodule update --init --recursive --depth 1
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=$PWD/../../jxl-install \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+            -DBUILD_SHARED_LIBS=ON \
+            -DBUILD_TESTING=OFF \
+            -DJPEGXL_ENABLE_TOOLS=OFF \
+            -DJPEGXL_ENABLE_VIEWERS=OFF \
+            -DJPEGXL_ENABLE_PLUGINS=OFF
+          cmake --build . -j$(sysctl -n hw.ncpu)
+          cmake --install .
+          cd ../..
+          
+          echo "✓ libjxl built and installed"
 
       - name: Download ImageMagick source
         run: |
@@ -102,18 +176,20 @@ jobs:
           # Set minimum deployment target for backward compatibility
           export MACOSX_DEPLOYMENT_TARGET=11.0
           
-          # Set up paths for Homebrew libraries (different for Intel vs ARM)
+          # Set up paths for Homebrew libraries and our custom builds
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            export CFLAGS="-arch arm64 -mmacosx-version-min=11.0 -I/opt/homebrew/include"
-            export LDFLAGS="-arch arm64 -mmacosx-version-min=11.0 -L/opt/homebrew/lib"
-            export CXXFLAGS="-arch arm64 -mmacosx-version-min=11.0 -I/opt/homebrew/include"
-            export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/libtool/lib/pkgconfig"
+            BREW_PREFIX="/opt/homebrew"
+            ARCH_FLAGS="-arch arm64"
           else
-            export CFLAGS="-arch x86_64 -mmacosx-version-min=11.0 -I/usr/local/include"
-            export LDFLAGS="-arch x86_64 -mmacosx-version-min=11.0 -L/usr/local/lib"
-            export CXXFLAGS="-arch x86_64 -mmacosx-version-min=11.0 -I/usr/local/include"
-            export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/opt/libtool/lib/pkgconfig"
+            BREW_PREFIX="/usr/local"
+            ARCH_FLAGS="-arch x86_64"
           fi
+          
+          # Add our custom-built libraries to paths
+          export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include -I$PWD/../heif-install/include -I$PWD/../jxl-install/include"
+          export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib -L$PWD/../heif-install/lib -L$PWD/../jxl-install/lib"
+          export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include -I$PWD/../heif-install/include -I$PWD/../jxl-install/include"
+          export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/opt/libtool/lib/pkgconfig:$PWD/../heif-install/lib/pkgconfig:$PWD/../jxl-install/lib/pkgconfig"
           
           # Display environment for debugging
           echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
@@ -198,6 +274,10 @@ jobs:
               BREW_PREFIX="/usr/local"
             fi
             
+            # Custom build directories
+            HEIF_LIB="$PWD/../../heif-install/lib"
+            JXL_LIB="$PWD/../../jxl-install/lib"
+            
             # Get all dylib dependencies (excluding system libraries)
             otool -L "$binary" 2>/dev/null | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
               local dep_name=$(basename "$dep")
@@ -209,6 +289,15 @@ jobs:
                 if [ -f "$dep" ]; then
                   echo "${indent}  → Copying: $dep_name (from $dep)"
                   cp "$dep" "$dest"
+                  copy_deps "$dest" $((level + 1))
+                # Search in our custom build directories
+                elif [ -f "$HEIF_LIB/$dep_name" ]; then
+                  echo "${indent}  → Copying: $dep_name (from custom heif build)"
+                  cp "$HEIF_LIB/$dep_name" "$dest"
+                  copy_deps "$dest" $((level + 1))
+                elif [ -f "$JXL_LIB/$dep_name" ]; then
+                  echo "${indent}  → Copying: $dep_name (from custom jxl build)"
+                  cp "$JXL_LIB/$dep_name" "$dest"
                   copy_deps "$dest" $((level + 1))
                 # If exact path doesn't exist, search in Homebrew
                 elif [ -f "$BREW_PREFIX/lib/$dep_name" ]; then
@@ -223,7 +312,7 @@ jobs:
                     cp "$found_path" "$dest"
                     copy_deps "$dest" $((level + 1))
                   else
-                    echo "${indent}  ⚠ Not found: $dep_name (searched: $dep, $BREW_PREFIX/lib, Cellar)"
+                    echo "${indent}  ⚠ Not found: $dep_name (searched: custom builds, Homebrew, Cellar)"
                   fi
                 fi
               fi
