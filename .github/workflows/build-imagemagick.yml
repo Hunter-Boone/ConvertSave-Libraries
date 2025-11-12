@@ -354,19 +354,19 @@ jobs:
       - name: Download ImageMagick 7.0.10-42 source
         run: |
           VERSION="7.0.10-42"
-          DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.xz"
           
           echo "Downloading ImageMagick ${VERSION} from: $DOWNLOAD_URL"
-          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
+          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.xz "$DOWNLOAD_URL"
           
           echo "Verifying download..."
-          if [ ! -f imagemagick.tar.gz ] || [ $(stat -f%z imagemagick.tar.gz 2>/dev/null || stat -c%s imagemagick.tar.gz) -lt 10000 ]; then
+          if [ ! -f imagemagick.tar.xz ] || [ $(stat -f%z imagemagick.tar.xz 2>/dev/null || stat -c%s imagemagick.tar.xz) -lt 10000 ]; then
             echo "ERROR: Download failed or file is too small"
             exit 1
           fi
           
           echo "Extracting..."
-          tar xzf imagemagick.tar.gz
+          tar xJf imagemagick.tar.xz
           mv ImageMagick-${VERSION} imagemagick-src
           echo "✓ Source code ready"
 
