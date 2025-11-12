@@ -152,6 +152,9 @@ jobs:
             sed -i.bak 's/cmake_minimum_required(VERSION 2.8.12)/cmake_minimum_required(VERSION 3.5)/' third_party/sjpeg/CMakeLists.txt
           fi
           
+          # Remove --exclude-libs flag which is not supported on macOS
+          find . -name "CMakeLists.txt" -exec sed -i.bak 's/--exclude-libs=ALL//g' {} \;
+          
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
