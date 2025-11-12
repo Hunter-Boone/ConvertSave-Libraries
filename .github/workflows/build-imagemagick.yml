@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       imagemagick-version:
-        description: 'ImageMagick version to build (e.g., 7.1.1-39)'
+        description: 'ImageMagick version to build (e.g., 7.1.2-8)'
         required: true
-        default: '7.1.1-39'
+        default: '7.1.2-8'
       release-tag:
         description: 'Release tag name (e.g., v1.0.0)'
         required: true
