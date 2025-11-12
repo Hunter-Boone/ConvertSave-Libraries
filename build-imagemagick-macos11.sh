@@ -4,7 +4,7 @@ set -e
 # Build ImageMagick on macOS 11 with full HEIC support
 # This script builds a fully portable ImageMagick with all dependencies bundled
 
-IMAGEMAGICK_VERSION="7.1.1-39"
+IMAGEMAGICK_VERSION="7.1.2-8"
 ARCH=$(uname -m)  # arm64 or x86_64
 BUILD_DIR="$PWD/build-$ARCH"
 PREFIX="$BUILD_DIR/imagemagick-install"

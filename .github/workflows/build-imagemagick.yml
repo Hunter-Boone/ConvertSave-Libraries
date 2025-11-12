@@ -69,8 +69,9 @@ jobs:
           # Install build tools
           brew install pkg-config libtool autoconf automake
           
-          # Install image format libraries with full support
-          brew install jpeg libpng libtiff webp libheif freetype
+          # Install comprehensive image format libraries
+          brew install jpeg libpng libtiff webp libheif freetype openjpeg openexr \
+            ghostscript pango liblqr libraw
           
           # Verify libtool installation (provides libltdl)
           brew list libtool
@@ -123,21 +124,34 @@ jobs:
           echo "LDFLAGS: $LDFLAGS"
           echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
           
+          # Configure with comprehensive format support (similar to How to Convert)
           ./configure \
             --prefix=$PWD/../imagemagick-build \
             --with-quantum-depth=16 \
             --enable-hdri \
-            --without-modules \
-            --with-jpeg \
-            --with-png \
-            --with-tiff \
-            --with-webp \
-            --with-heic \
-            --with-freetype \
-            --without-jxl \
+            --with-modules \
+            --with-freetype=yes \
+            --with-jpeg=yes \
+            --with-png=yes \
+            --with-tiff=yes \
+            --with-webp=yes \
+            --with-heic=yes \
+            --with-openjp2 \
+            --with-openexr \
+            --with-gslib \
+            --with-pango \
+            --with-lqr \
+            --with-raw=yes \
+            --without-gvc \
             --without-x \
+            --without-wmf \
+            --without-fftw \
+            --without-jxl \
+            --disable-opencl \
+            --enable-openmp \
             --disable-static \
             --enable-shared \
+            --enable-delegate-build \
             --disable-dependency-tracking
 
       - name: Build ImageMagick
@@ -171,7 +185,7 @@ jobs:
           # Copy binaries
           cp bin/magick package/bin/
           
-          # Copy ImageMagick libraries
+          # Copy ImageMagick libraries (including modules since we enabled them)
           cp -r lib/*.dylib package/lib/ || true
           cp -r lib/ImageMagick-* package/lib/ || true
           
@@ -191,6 +205,10 @@ jobs:
             mkdir -p package/share
             cp -r share/ImageMagick-7 package/share/
           fi
+          
+          echo "=== Package contents ==="
+          echo "Modules:"
+          find package/lib/ImageMagick-* -name "*.so" -o -name "*.la" 2>/dev/null | head -20 || echo "No modules found"
           
           echo "=== Package structure ==="
           find package -type d | head -20
@@ -334,7 +352,14 @@ jobs:
             libtiff-dev \
             libwebp-dev \
             libheif-dev \
-            libfreetype6-dev
+            libfreetype6-dev \
+            libopenjp2-7-dev \
+            libopenexr-dev \
+            ghostscript \
+            libgs-dev \
+            libpango1.0-dev \
+            liblqr-1-0-dev \
+            libraw-dev
 
       - name: Download ImageMagick source
         run: |
@@ -361,19 +386,33 @@ jobs:
         run: |
           cd imagemagick-src
           
+          # Configure with comprehensive format support (matching macOS build)
           ./configure \
             --prefix=$PWD/../imagemagick-build \
             --with-quantum-depth=16 \
             --enable-hdri \
-            --without-modules \
-            --with-jpeg \
-            --with-png \
-            --with-tiff \
-            --with-webp \
-            --with-heic \
-            --with-freetype \
+            --with-modules \
+            --with-freetype=yes \
+            --with-jpeg=yes \
+            --with-png=yes \
+            --with-tiff=yes \
+            --with-webp=yes \
+            --with-heic=yes \
+            --with-openjp2 \
+            --with-openexr \
+            --with-gslib \
+            --with-pango \
+            --with-lqr \
+            --with-raw=yes \
+            --without-gvc \
+            --without-x \
+            --without-wmf \
+            --without-fftw \
+            --disable-opencl \
+            --enable-openmp \
             --disable-static \
-            --enable-shared
+            --enable-shared \
+            --enable-delegate-build
           
           make -j$(nproc)
           make install
@@ -430,10 +469,12 @@ jobs:
             - **Windows** - Use official ImageMagick portable builds
             
             ### macOS 13+ Features (GitHub Actions builds):
-            - Quantum depth: 16, HDRI enabled
-            - Format support: JPEG, PNG, TIFF, WebP, **HEIC**, GIF, BMP, and more
-            - **Full HEIC support** - built on macOS 13 for macOS 13+
-            - Works on: macOS 13 Ventura and later
+            - Quantum depth: 16, HDRI enabled, OpenMP support
+            - Module system enabled for dynamic format loading
+            - Format support: JPEG, PNG, TIFF, WebP, **HEIC**, JPEG2000, OpenEXR, RAW, PDF, and more
+            - Advanced features: Pango text rendering, LiquidRescale, Ghostscript support
+            - Built on: macOS 13 Ventura
+            - Works on: macOS 13+ (Ventura and later)
             
             ### macOS 11 Features (manual builds):
             - Quantum depth: 16, HDRI enabled
@@ -468,14 +509,18 @@ jobs:
             - Built on macOS 11 with dependencies compatible with older systems
             - **Your app will auto-download these on macOS 11-12**
             
-            ### macOS 13+ (Ventura and later) - HEIC support ✅:
+            ### macOS 13+ (Ventura and later) - Full Featured ✅:
             - `imagemagick-macos13-x86_64.tar.gz` - Intel Macs
             - `imagemagick-macos13-arm64.tar.gz` - Apple Silicon
-            - Built on GitHub Actions with latest dependencies
+            - **Comprehensive format support**: HEIC, JPEG2000, OpenEXR, RAW, PDF, and more
+            - **Advanced features**: Module system, OpenMP, Pango, LiquidRescale
+            - Built on GitHub Actions with all dependencies bundled
             - **Your app will auto-download these on macOS 13+**
             
             ### Linux:
-            - `imagemagick-linux-x64.tar.gz` - Full HEIC support
+            - `imagemagick-linux-x64.tar.gz`
+            - **Comprehensive format support**: HEIC, JPEG2000, OpenEXR, RAW, PDF, and more
+            - **Advanced features**: Module system, OpenMP, Pango, LiquidRescale
             
             ### Windows:
             Use [official portable builds](https://imagemagick.org/script/download.php#windows)
