@@ -67,111 +67,14 @@ jobs:
       - name: Install dependencies
         run: |
           # Install build tools
-          brew install pkg-config libtool autoconf automake cmake ninja nasm
+          brew install pkg-config libtool autoconf automake
           
-          # Install basic image format libraries (pure C, no compatibility issues)
-          brew install jpeg libpng libtiff webp
+          # Install image format libraries
+          brew install jpeg libpng libtiff webp libheif
           
           # Verify libtool installation (provides libltdl)
           brew list libtool
           ls -la /opt/homebrew/opt/libtool/lib/ 2>/dev/null || ls -la /usr/local/opt/libtool/lib/
-
-      - name: Build libheif from source for compatibility
-        run: |
-          # Set deployment target and arch-specific paths
-          export MACOSX_DEPLOYMENT_TARGET=11.0
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            BREW_PREFIX="/opt/homebrew"
-            ARCH_FLAGS="-arch arm64"
-          else
-            BREW_PREFIX="/usr/local"
-            ARCH_FLAGS="-arch x86_64"
-          fi
-          
-          export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
-          export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
-          export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
-          
-          # Clone and build libheif (minimal build - just core library)
-          git clone --depth 1 --branch v1.19.5 https://github.com/strukturag/libheif.git
-          cd libheif
-          mkdir build && cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=$PWD/../../heif-install \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
-            -DBUILD_SHARED_LIBS=ON \
-            -DWITH_EXAMPLES=OFF \
-            -DWITH_GDK_PIXBUF=OFF \
-            -DWITH_LIBDE265=OFF \
-            -DWITH_X265=OFF \
-            -DWITH_AOM=OFF \
-            -DWITH_DAV1D=OFF \
-            -DWITH_RAV1E=OFF \
-            -DWITH_SvtEnc=OFF
-          
-          # Only build the core library, skip heifio which has JPEG conflicts
-          cmake --build . --target heif -j$(sysctl -n hw.ncpu)
-          
-          # Manually install just what we need
-          mkdir -p $PWD/../../heif-install/lib
-          mkdir -p $PWD/../../heif-install/include/libheif
-          cp libheif/libheif.* $PWD/../../heif-install/lib/ || cp libheif.* $PWD/../../heif-install/lib/
-          cp ../libheif/*.h $PWD/../../heif-install/include/libheif/
-          
-          cd ../..
-          
-          echo "✓ libheif core library built and installed (without heifio)"
-
-      - name: Build libjxl from source for compatibility
-        run: |
-          # Set deployment target and arch-specific paths
-          export MACOSX_DEPLOYMENT_TARGET=11.0
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            BREW_PREFIX="/opt/homebrew"
-            ARCH_FLAGS="-arch arm64"
-          else
-            BREW_PREFIX="/usr/local"
-            ARCH_FLAGS="-arch x86_64"
-          fi
-          
-          export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
-          export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
-          export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
-          
-          # Clone and build libjxl
-          git clone --depth 1 --branch v0.11.1 https://github.com/libjxl/libjxl.git
-          cd libjxl
-          
-          # Initialize submodules but skip problematic ones
-          git submodule update --init --recursive --depth 1 || true
-          
-          # Fix CMake version requirement in sjpeg if it exists
-          if [ -f "third_party/sjpeg/CMakeLists.txt" ]; then
-            sed -i.bak 's/cmake_minimum_required(VERSION 2.8.12)/cmake_minimum_required(VERSION 3.5)/' third_party/sjpeg/CMakeLists.txt
-          fi
-          
-          # Remove --exclude-libs flag which is not supported on macOS
-          find . -name "CMakeLists.txt" -exec sed -i.bak 's/--exclude-libs=ALL//g' {} \;
-          
-          mkdir build && cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=$PWD/../../jxl-install \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
-            -DBUILD_SHARED_LIBS=ON \
-            -DBUILD_TESTING=OFF \
-            -DJPEGXL_ENABLE_TOOLS=OFF \
-            -DJPEGXL_ENABLE_VIEWERS=OFF \
-            -DJPEGXL_ENABLE_PLUGINS=OFF \
-            -DJPEGXL_ENABLE_SJPEG=OFF
-          cmake --build . -j$(sysctl -n hw.ncpu)
-          cmake --install .
-          cd ../..
-          
-          echo "✓ libjxl built and installed"
 
       - name: Download ImageMagick source
         run: |
@@ -199,7 +102,7 @@ jobs:
           # Set minimum deployment target for backward compatibility
           export MACOSX_DEPLOYMENT_TARGET=11.0
           
-          # Set up paths for Homebrew libraries and our custom builds
+          # Set up paths for Homebrew libraries
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             BREW_PREFIX="/opt/homebrew"
             ARCH_FLAGS="-arch arm64"
@@ -208,11 +111,10 @@ jobs:
             ARCH_FLAGS="-arch x86_64"
           fi
           
-          # Add our custom-built libraries to paths
-          export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include -I$PWD/../heif-install/include -I$PWD/../jxl-install/include"
-          export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib -L$PWD/../heif-install/lib -L$PWD/../jxl-install/lib"
-          export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include -I$PWD/../heif-install/include -I$PWD/../jxl-install/include"
-          export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/opt/libtool/lib/pkgconfig:$PWD/../heif-install/lib/pkgconfig:$PWD/../jxl-install/lib/pkgconfig"
+          export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
+          export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
+          export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
+          export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/opt/libtool/lib/pkgconfig"
           
           # Display environment for debugging
           echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
@@ -231,9 +133,9 @@ jobs:
             --with-tiff \
             --with-webp \
             --with-heic \
-            --with-jxl \
+            --without-jxl \
             --without-x \
-            --enable-static \
+            --disable-static \
             --enable-shared \
             --disable-dependency-tracking
 
@@ -297,10 +199,6 @@ jobs:
               BREW_PREFIX="/usr/local"
             fi
             
-            # Custom build directories
-            HEIF_LIB="$PWD/../../heif-install/lib"
-            JXL_LIB="$PWD/../../jxl-install/lib"
-            
             # Get all dylib dependencies (excluding system libraries)
             otool -L "$binary" 2>/dev/null | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
               local dep_name=$(basename "$dep")
@@ -312,15 +210,6 @@ jobs:
                 if [ -f "$dep" ]; then
                   echo "${indent}  → Copying: $dep_name (from $dep)"
                   cp "$dep" "$dest"
-                  copy_deps "$dest" $((level + 1))
-                # Search in our custom build directories
-                elif [ -f "$HEIF_LIB/$dep_name" ]; then
-                  echo "${indent}  → Copying: $dep_name (from custom heif build)"
-                  cp "$HEIF_LIB/$dep_name" "$dest"
-                  copy_deps "$dest" $((level + 1))
-                elif [ -f "$JXL_LIB/$dep_name" ]; then
-                  echo "${indent}  → Copying: $dep_name (from custom jxl build)"
-                  cp "$JXL_LIB/$dep_name" "$dest"
                   copy_deps "$dest" $((level + 1))
                 # If exact path doesn't exist, search in Homebrew
                 elif [ -f "$BREW_PREFIX/lib/$dep_name" ]; then
@@ -335,7 +224,7 @@ jobs:
                     cp "$found_path" "$dest"
                     copy_deps "$dest" $((level + 1))
                   else
-                    echo "${indent}  ⚠ Not found: $dep_name (searched: custom builds, Homebrew, Cellar)"
+                    echo "${indent}  ⚠ Not found: $dep_name (searched: $dep, $BREW_PREFIX/lib, Cellar)"
                   fi
                 fi
               fi
@@ -360,15 +249,6 @@ jobs:
           # List all libraries we're bundling
           echo "=== Bundled libraries ==="
           ls -lh package/lib/*.dylib
-          
-          # Strip and codesign libraries for better compatibility
-          echo "=== Processing libraries for compatibility ==="
-          for dylib in package/lib/*.dylib; do
-            if [ -f "$dylib" ]; then
-              # Remove code signature (will be re-signed by macOS when loaded)
-              codesign --remove-signature "$dylib" 2>/dev/null || true
-            fi
-          done
           
           # Fix library paths to use @rpath
           echo "=== Fixing library paths ==="
@@ -523,10 +403,11 @@ jobs:
             ### macOS Features:
             - Quantum depth: 16
             - HDRI enabled
-            - Format support: JPEG, PNG, TIFF, WebP, HEIC, AVIF, JPEG XL, GIF, BMP, and more
-            - All sub-libraries bundled (libjpeg, libpng, libtiff, libwebp, libheif, libjxl, etc.)
+            - Format support: JPEG, PNG, TIFF, WebP, HEIC, GIF, BMP, and more
+            - All sub-libraries bundled (libjpeg, libpng, libtiff, libwebp, libheif, etc.)
             - Uses @rpath for relocatable binaries
             - Built with deployment target 11.0 for backward compatibility
+            - Note: JPEG XL support excluded to avoid build complexity
             
             ### For Windows:
             Download from [ImageMagick.org](https://imagemagick.org/script/download.php#windows)
