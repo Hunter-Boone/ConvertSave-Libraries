@@ -330,6 +330,275 @@ jobs:
   #   runs-on: windows-latest
   #   ...
 
+  build-macos-legacy:
+    # Build old version 7.0.10-42 (from 2020) for compatibility testing
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-latest' }}
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          # Install build tools
+          brew install pkg-config libtool autoconf automake
+          
+          # Install comprehensive image format libraries
+          brew install jpeg libpng libtiff webp libheif freetype openjpeg openexr \
+            ghostscript pango liblqr libraw
+          
+          # Verify libtool installation (provides libltdl)
+          brew list libtool
+          ls -la /opt/homebrew/opt/libtool/lib/ 2>/dev/null || ls -la /usr/local/opt/libtool/lib/
+
+      - name: Download ImageMagick 7.0.10-42 source
+        run: |
+          VERSION="7.0.10-42"
+          DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          
+          echo "Downloading ImageMagick ${VERSION} from: $DOWNLOAD_URL"
+          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
+          
+          echo "Verifying download..."
+          if [ ! -f imagemagick.tar.gz ] || [ $(stat -f%z imagemagick.tar.gz 2>/dev/null || stat -c%s imagemagick.tar.gz) -lt 10000 ]; then
+            echo "ERROR: Download failed or file is too small"
+            exit 1
+          fi
+          
+          echo "Extracting..."
+          tar xzf imagemagick.tar.gz
+          mv ImageMagick-${VERSION} imagemagick-src
+          echo "✓ Source code ready"
+
+      - name: Configure ImageMagick 7.0.10-42
+        run: |
+          cd imagemagick-src
+          
+          # Set minimum deployment target for backward compatibility
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+          
+          # Set up paths for Homebrew libraries
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            BREW_PREFIX="/opt/homebrew"
+            ARCH_FLAGS="-arch arm64"
+          else
+            BREW_PREFIX="/usr/local"
+            ARCH_FLAGS="-arch x86_64"
+          fi
+          
+          export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
+          export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
+          export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
+          export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/opt/libtool/lib/pkgconfig"
+          
+          # Display environment for debugging
+          echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
+          echo "CFLAGS: $CFLAGS"
+          echo "CXXFLAGS: $CXXFLAGS"
+          echo "LDFLAGS: $LDFLAGS"
+          echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+          
+          # Configure with comprehensive format support (similar to How to Convert)
+          ./configure \
+            --prefix=$PWD/../imagemagick-build \
+            --with-quantum-depth=16 \
+            --enable-hdri \
+            --with-modules \
+            --with-freetype=yes \
+            --with-jpeg=yes \
+            --with-png=yes \
+            --with-tiff=yes \
+            --with-webp=yes \
+            --with-heic=yes \
+            --with-openjp2 \
+            --with-openexr \
+            --with-gslib \
+            --with-pango \
+            --with-lqr \
+            --with-raw=yes \
+            --without-gvc \
+            --without-x \
+            --without-wmf \
+            --without-fftw \
+            --without-jxl \
+            --disable-opencl \
+            --enable-openmp \
+            --disable-static \
+            --enable-shared \
+            --enable-delegate-build \
+            --disable-dependency-tracking
+
+      - name: Build ImageMagick 7.0.10-42
+        run: |
+          cd imagemagick-src
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Install ImageMagick 7.0.10-42
+        run: |
+          cd imagemagick-src
+          make install
+      
+      - name: Verify HEIC support
+        run: |
+          cd imagemagick-build
+          echo "=== Verifying ImageMagick 7.0.10-42 HEIC support ==="
+          if bin/magick identify -list format | grep -i heic; then
+            echo "✅ HEIC support confirmed!"
+          else
+            echo "⚠️ WARNING: HEIC support not detected"
+            exit 1
+          fi
+
+      - name: Package ImageMagick 7.0.10-42
+        run: |
+          cd imagemagick-build
+          
+          # Create clean directory structure
+          mkdir -p package/bin package/lib package/etc
+          
+          # Copy binaries
+          cp bin/magick package/bin/
+          
+          # Copy ImageMagick libraries (including modules since we enabled them)
+          cp -r lib/*.dylib package/lib/ || true
+          cp -r lib/ImageMagick-* package/lib/ || true
+          
+          # Copy configuration files
+          echo "=== Checking for configuration files ==="
+          if [ -d etc/ImageMagick-7 ]; then
+            echo "Copying ImageMagick configuration files from etc/ImageMagick-7..."
+            cp -r etc/ImageMagick-7 package/etc/
+            ls -la package/etc/ImageMagick-7/
+          else
+            echo "WARNING: etc/ImageMagick-7 not found"
+          fi
+          
+          # Copy shared files if they exist
+          if [ -d share/ImageMagick-7 ]; then
+            echo "Copying ImageMagick shared files..."
+            mkdir -p package/share
+            cp -r share/ImageMagick-7 package/share/
+          fi
+          
+          echo "=== Package contents ==="
+          echo "Modules:"
+          find package/lib/ImageMagick-* -name "*.so" -o -name "*.la" 2>/dev/null | head -20 || echo "No modules found"
+          
+          echo "=== Package structure ==="
+          find package -type d | head -20
+          echo "=== Configuration files ==="
+          find package/etc -type f 2>/dev/null || echo "No etc directory"
+          
+          # Function to recursively copy all dylib dependencies
+          copy_deps() {
+            local binary="$1"
+            local level="${2:-0}"
+            local indent=$(printf '%*s' $((level * 2)) '')
+            echo "${indent}Processing: $(basename $binary)"
+            
+            # Determine Homebrew prefix based on architecture
+            if [ "${{ matrix.arch }}" = "arm64" ]; then
+              BREW_PREFIX="/opt/homebrew"
+            else
+              BREW_PREFIX="/usr/local"
+            fi
+            
+            # Get all dylib dependencies (excluding system libraries)
+            otool -L "$binary" 2>/dev/null | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+              local dep_name=$(basename "$dep")
+              local dest="package/lib/$dep_name"
+              
+              # Copy if not already present
+              if [ ! -f "$dest" ]; then
+                # Try the exact path first
+                if [ -f "$dep" ]; then
+                  echo "${indent}  → Copying: $dep_name (from $dep)"
+                  cp "$dep" "$dest"
+                  copy_deps "$dest" $((level + 1))
+                # If exact path doesn't exist, search in Homebrew
+                elif [ -f "$BREW_PREFIX/lib/$dep_name" ]; then
+                  echo "${indent}  → Copying: $dep_name (from Homebrew)"
+                  cp "$BREW_PREFIX/lib/$dep_name" "$dest"
+                  copy_deps "$dest" $((level + 1))
+                # Try searching in Cellar for versioned libraries
+                else
+                  local found_path=$(find "$BREW_PREFIX/Cellar" -name "$dep_name" 2>/dev/null | head -1)
+                  if [ -n "$found_path" ] && [ -f "$found_path" ]; then
+                    echo "${indent}  → Copying: $dep_name (from $found_path)"
+                    cp "$found_path" "$dest"
+                    copy_deps "$dest" $((level + 1))
+                  else
+                    echo "${indent}  ⚠ Not found: $dep_name (searched: $dep, $BREW_PREFIX/lib, Cellar)"
+                  fi
+                fi
+              fi
+            done
+          }
+          
+          # Copy all dependencies for magick binary
+          echo "=== Copying dependencies for magick binary ==="
+          copy_deps "package/bin/magick" 0
+          
+          # Copy all dependencies for ImageMagick dylibs (need to loop multiple times to catch indirect deps)
+          echo "=== Copying dependencies for ImageMagick libraries (multiple passes) ==="
+          for pass in 1 2 3; do
+            echo "Pass $pass..."
+            for dylib in package/lib/*.dylib; do
+              if [ -f "$dylib" ]; then
+                copy_deps "$dylib" 0
+              fi
+            done
+          done
+          
+          # List all libraries we're bundling
+          echo "=== Bundled libraries ==="
+          ls -lh package/lib/*.dylib
+          
+          # Fix library paths to use @rpath
+          echo "=== Fixing library paths ==="
+          for dylib in package/lib/*.dylib; do
+            if [ -f "$dylib" ]; then
+              echo "Fixing: $(basename $dylib)"
+              
+              # Change library ID to @rpath
+              install_name_tool -id "@rpath/$(basename $dylib)" "$dylib"
+              
+              # Fix all dependencies to use @rpath
+              otool -L "$dylib" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+                install_name_tool -change "$dep" "@rpath/$(basename $dep)" "$dylib" 2>/dev/null || true
+              done
+            fi
+          done
+          
+          # Fix magick binary to use @rpath
+          echo "=== Fixing magick binary paths ==="
+          otool -L package/bin/magick | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+            install_name_tool -change "$dep" "@rpath/$(basename $dep)" package/bin/magick 2>/dev/null || true
+          done
+          
+          # Add @rpath to magick binary
+          install_name_tool -add_rpath "@executable_path/../lib" package/bin/magick
+          
+          # Verify the binary can find its libraries
+          echo "=== Verifying magick binary ==="
+          otool -L package/bin/magick
+          
+          echo "=== Sample library dependencies ==="
+          otool -L package/lib/libMagickCore-7.Q16HDRI.dylib | head -20
+          
+          # Create tarball with version in filename
+          cd package
+          tar czf ../../imagemagick-7.0.10-42-macos-${{ matrix.arch }}.tar.gz .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagemagick-legacy-7.0.10-42-macos13-${{ matrix.arch }}
+          path: imagemagick-7.0.10-42-macos-${{ matrix.arch }}.tar.gz
+          retention-days: 30
+
   build-linux:
     needs: prepare
     runs-on: ubuntu-latest
@@ -429,7 +698,7 @@ jobs:
           path: imagemagick-linux-x64.tar.gz
 
   create-release:
-    needs: [prepare, build-macos, build-linux]
+    needs: [prepare, build-macos, build-macos-legacy, build-linux]
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     steps:
@@ -441,17 +710,28 @@ jobs:
       - name: Display structure
         run: ls -R artifacts
       
-      - name: Rename macOS 13 builds
+      - name: Rename and organize builds
         run: |
           cd artifacts
-          # Rename to indicate these are macOS 13 builds (won't work on macOS 11)
+          
+          # Rename current version builds to indicate macOS 13
           for file in imagemagick-macos13-*/imagemagick-*.tar.gz; do
-            if [ -f "$file" ]; then
+            if [ -f "$file" ] && [[ ! "$file" =~ 7\.0\.10-42 ]]; then
               newname=$(echo "$file" | sed 's/imagemagick-macos-/imagemagick-macos13-/')
               mv "$file" "$newname"
               echo "Renamed: $file -> $newname"
             fi
           done
+          
+          # Move legacy builds to root (they already have version in filename)
+          for file in imagemagick-legacy-*/imagemagick-7.0.10-42-*.tar.gz; do
+            if [ -f "$file" ]; then
+              newname=$(basename "$file")
+              mv "$file" "$newname"
+              echo "Moved legacy: $file -> $newname"
+            fi
+          done
+          
           ls -R
 
       - name: Create versioned release
@@ -509,13 +789,19 @@ jobs:
             - Built on macOS 11 with dependencies compatible with older systems
             - **Your app will auto-download these on macOS 11-12**
             
-            ### macOS 13+ (Ventura and later) - Full Featured ✅:
-            - `imagemagick-macos13-x86_64.tar.gz` - Intel Macs
-            - `imagemagick-macos13-arm64.tar.gz` - Apple Silicon
+            ### macOS 13+ (Ventura and later) - Latest Version ✅:
+            - `imagemagick-macos13-x86_64.tar.gz` - Intel Macs (Latest: v${{ needs.prepare.outputs.version }})
+            - `imagemagick-macos13-arm64.tar.gz` - Apple Silicon (Latest: v${{ needs.prepare.outputs.version }})
             - **Comprehensive format support**: HEIC, JPEG2000, OpenEXR, RAW, PDF, and more
             - **Advanced features**: Module system, OpenMP, Pango, LiquidRescale
             - Built on GitHub Actions with all dependencies bundled
             - **Your app will auto-download these on macOS 13+**
+            
+            ### macOS 13+ - Legacy Version (7.0.10-42 from 2020) 🕰️:
+            - `imagemagick-7.0.10-42-macos-x86_64.tar.gz` - Intel Macs
+            - `imagemagick-7.0.10-42-macos-arm64.tar.gz` - Apple Silicon
+            - Old stable version for compatibility testing
+            - Same comprehensive format support as latest builds
             
             ### Linux:
             - `imagemagick-linux-x64.tar.gz`
