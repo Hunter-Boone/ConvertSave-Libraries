@@ -11,7 +11,7 @@ ConvertSave bundles conversion tools to work offline. This repository builds tho
 ### ImageMagick
 
 - **Platforms**: macOS (Intel + Apple Silicon), Linux
-- **Features**: Q16, HDRI, HEIC/JPEG/PNG/TIFF/WebP support
+- **Features**: Q16, HDRI, HEIC/JPEG/PNG/TIFF/WebP support (built-in coders)
 - **macOS**: All dependencies bundled (freetype, jpeg, png, etc.)
 - **Windows**: Use official portable builds from ImageMagick.org
 - **Workflow**: `.github/workflows/build-imagemagick.yml`

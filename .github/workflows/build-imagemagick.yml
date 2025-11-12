@@ -119,7 +119,7 @@ jobs:
             --prefix=$PWD/../imagemagick-build \
             --with-quantum-depth=16 \
             --enable-hdri \
-            --with-modules \
+            --without-modules \
             --with-jpeg \
             --with-png \
             --with-tiff \
@@ -314,7 +314,7 @@ jobs:
             --prefix=$PWD/../imagemagick-build \
             --with-quantum-depth=16 \
             --enable-hdri \
-            --with-modules \
+            --without-modules \
             --with-jpeg \
             --with-png \
             --with-tiff \
