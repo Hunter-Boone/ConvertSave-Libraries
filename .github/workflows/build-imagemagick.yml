@@ -69,8 +69,8 @@ jobs:
           # Install build tools
           brew install pkg-config libtool autoconf automake
           
-          # Install image format libraries
-          brew install jpeg libpng libtiff libheif webp jpeg-xl
+          # Install image format libraries (only pure C libraries for better compatibility)
+          brew install jpeg libpng libtiff webp
           
           # Verify libtool installation (provides libltdl)
           brew list libtool
@@ -124,7 +124,8 @@ jobs:
             --with-png \
             --with-tiff \
             --with-webp \
-            --with-heic \
+            --without-heic \
+            --without-jxl \
             --without-x \
             --disable-static \
             --enable-shared \
@@ -394,9 +395,10 @@ jobs:
             ### macOS Features:
             - Quantum depth: 16
             - HDRI enabled
-            - JPEG, PNG, TIFF, WebP, HEIC support
-            - All sub-libraries bundled (freetype, jpeg, png, etc.)
+            - Format support: JPEG, PNG, TIFF, WebP, GIF, BMP, and more
+            - All sub-libraries bundled (libjpeg, libpng, libtiff, libwebp, etc.)
             - Uses @rpath for relocatable binaries
+            - Pure C libraries only (no C++ dependencies for better compatibility)
             
             ### For Windows:
             Download from [ImageMagick.org](https://imagemagick.org/script/download.php#windows)
