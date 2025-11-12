@@ -9,8 +9,10 @@ ConvertSave bundles conversion tools to work offline. This repository builds tho
 ## Libraries
 
 ### ImageMagick
-- **Platforms**: macOS (Intel + Apple Silicon), Windows, Linux
+- **Platforms**: macOS (Intel + Apple Silicon), Linux
 - **Features**: Q16, HDRI, HEIC/JPEG/PNG/TIFF/WebP support
+- **macOS**: All dependencies bundled (freetype, jpeg, png, etc.)
+- **Windows**: Use official portable builds from ImageMagick.org
 - **Workflow**: `.github/workflows/build-imagemagick.yml`
 
 ### FFmpeg
@@ -33,19 +35,30 @@ Runs monthly to check for ImageMagick updates.
 
 ## Using the Builds
 
-Download from [Releases](../../releases):
-- `imagemagick-macos-x86_64.tar.gz` - Intel Macs
-- `imagemagick-macos-arm64.tar.gz` - Apple Silicon
-- `imagemagick-windows-x64.zip` - Windows
-- `imagemagick-linux-x64.tar.gz` - Linux
+### "latest" Release
 
-Update ConvertSave to fetch from this repository's releases.
+The `latest` release tag is automatically updated with each new build. Use this URL pattern in ConvertSave:
+
+```
+https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-x86_64.tar.gz
+https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-macos-arm64.tar.gz
+https://github.com/YOUR_USERNAME/ConvertSave-Libraries/releases/download/latest/imagemagick-linux-x64.tar.gz
+```
+
+### Versioned Releases
+
+Specific versions are also available:
+- Browse [Releases](../../releases) for specific versions
+- Download `imagemagick-macos-x86_64.tar.gz`, `imagemagick-macos-arm64.tar.gz`, or `imagemagick-linux-x64.tar.gz`
+
+### Windows
+Use [official portable builds](https://imagemagick.org/script/download.php#windows)
 
 ## Platform Notes
 
-- **macOS**: Uses `@rpath` for relocatable binaries (no hardcoded paths)
-- **Windows**: Includes all required DLLs from MSYS2
+- **macOS**: Uses `@rpath` for relocatable binaries with all dependencies bundled
 - **Linux**: Standard shared library build
+- **Windows**: Not built here - use official ImageMagick portable binaries
 
 ## License
 

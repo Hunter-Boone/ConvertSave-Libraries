@@ -230,129 +230,12 @@ jobs:
           name: imagemagick-macos-${{ matrix.arch }}
           path: imagemagick-macos-${{ matrix.arch }}.tar.gz
 
-  build-windows:
-    needs: prepare
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSYS2
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            base-devel
-            autoconf
-            automake
-            libtool
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-libtool
-            mingw-w64-x86_64-libjpeg-turbo
-            mingw-w64-x86_64-libpng
-            mingw-w64-x86_64-libtiff
-            mingw-w64-x86_64-libwebp
-            mingw-w64-x86_64-libheif
-            mingw-w64-x86_64-pkg-config
-
-      - name: Download and build ImageMagick
-        shell: msys2 {0}
-        run: |
-          DOWNLOAD_URL="${{ needs.prepare.outputs.download-url }}"
-          VERSION="${{ needs.prepare.outputs.version }}"
-          
-          echo "Downloading from: $DOWNLOAD_URL"
-          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
-          
-          echo "Verifying download..."
-          FILE_SIZE=$(stat -c%s imagemagick.tar.gz)
-          if [ ! -f imagemagick.tar.gz ] || [ $FILE_SIZE -lt 10000 ]; then
-            echo "ERROR: Download failed or file is too small ($FILE_SIZE bytes)"
-            exit 1
-          fi
-          echo "Downloaded $FILE_SIZE bytes"
-          
-          echo "Extracting..."
-          tar xzf imagemagick.tar.gz
-          mv ImageMagick-${VERSION} imagemagick-src
-          
-          cd imagemagick-src
-          
-          ./configure \
-            --prefix=/c/imagemagick-build \
-            --with-quantum-depth=16 \
-            --enable-hdri \
-            --with-modules \
-            --with-jpeg \
-            --with-png \
-            --with-tiff \
-            --with-webp \
-            --with-heic \
-            --disable-static \
-            --enable-shared
-          
-          make -j$(nproc)
-          make install
-
-      - name: Package ImageMagick
-        shell: msys2 {0}
-        run: |
-          cd /c/imagemagick-build
-          
-          mkdir -p package/bin
-          
-          # Copy executables and DLLs
-          cp -r bin/* package/bin/ 2>/dev/null || true
-          
-          # Copy required DLLs from MSYS2
-          echo "=== Copying MSYS2 dependencies ==="
-          MINGW_BIN="/mingw64/bin"
-          
-          # Copy ImageMagick DLLs
-          for dll in libMagickCore-*.dll libMagickWand-*.dll; do
-            if [ -f "$MINGW_BIN/$dll" ]; then
-              echo "Copying: $dll"
-              cp "$MINGW_BIN/$dll" package/bin/
-            fi
-          done
-          
-          # Copy runtime DLLs
-          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
-            if [ -f "$MINGW_BIN/$dll" ]; then
-              echo "Copying: $dll"
-              cp "$MINGW_BIN/$dll" package/bin/
-            fi
-          done
-          
-          # Copy image format library DLLs
-          for dll in libjpeg-8.dll libpng16-16.dll libtiff-6.dll libwebp-7.dll libheif-1.dll; do
-            if [ -f "$MINGW_BIN/$dll" ]; then
-              echo "Copying: $dll"
-              cp "$MINGW_BIN/$dll" package/bin/
-            fi
-          done
-          
-          # Copy any additional dependencies these libraries need
-          for dll in libzstd.dll liblzma-5.dll libzlib1.dll libbz2-1.dll libdeflate.dll libsharpyuv-0.dll libgomp-1.dll; do
-            if [ -f "$MINGW_BIN/$dll" ]; then
-              echo "Copying: $dll"
-              cp "$MINGW_BIN/$dll" package/bin/
-            fi
-          done
-          
-          echo "=== Listing package contents ==="
-          ls -lh package/bin/*.dll
-          
-          # Create zip file using Windows native tools
-          cd package
-          powershell -Command "Compress-Archive -Path * -DestinationPath ../imagemagick-windows-x64.zip"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: imagemagick-windows-x64
-          path: C:\imagemagick-build\imagemagick-windows-x64.zip
+  # Windows build disabled - using official ImageMagick binaries instead
+  # The official portable builds work well and building from source takes too long
+  # build-windows:
+  #   needs: prepare
+  #   runs-on: windows-latest
+  #   ...
 
   build-linux:
     needs: prepare
@@ -430,7 +313,7 @@ jobs:
           path: imagemagick-linux-x64.tar.gz
 
   create-release:
-    needs: [prepare, build-macos, build-windows, build-linux]
+    needs: [prepare, build-macos, build-linux]
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     steps:
@@ -442,7 +325,7 @@ jobs:
       - name: Display structure
         run: ls -R artifacts
 
-      - name: Create Release
+      - name: Create versioned release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ needs.prepare.outputs.release-tag }}
@@ -451,17 +334,44 @@ jobs:
             ImageMagick ${{ needs.prepare.outputs.version }} built for ConvertSave
             
             ## Builds included:
-            - macOS (x86_64 and arm64)
-            - Windows (x64)
-            - Linux (x64)
+            - **macOS** (x86_64 and arm64) - Includes all dependencies bundled
+            - **Linux** (x64)
+            - **Windows** - Use official ImageMagick portable builds
             
-            All builds include:
+            ### macOS Features:
             - Quantum depth: 16
             - HDRI enabled
             - JPEG, PNG, TIFF, WebP, HEIC support
+            - All sub-libraries bundled (freetype, jpeg, png, etc.)
+            - Uses @rpath for relocatable binaries
+            
+            ### For Windows:
+            Download from [ImageMagick.org](https://imagemagick.org/script/download.php#windows)
           files: |
             artifacts/**/*.tar.gz
-            artifacts/**/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Update 'latest' release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: Latest ImageMagick Build
+          body: |
+            Latest ImageMagick build for ConvertSave (v${{ needs.prepare.outputs.version }})
+            
+            This release is automatically updated with the latest build.
+            
+            ## Files:
+            - `imagemagick-macos-x86_64.tar.gz` - Intel Macs (with all dependencies)
+            - `imagemagick-macos-arm64.tar.gz` - Apple Silicon (with all dependencies)
+            - `imagemagick-linux-x64.tar.gz` - Linux
+            
+            For Windows, use [official portable builds](https://imagemagick.org/script/download.php#windows)
+          files: |
+            artifacts/**/*.tar.gz
           draft: false
           prerelease: false
         env:
