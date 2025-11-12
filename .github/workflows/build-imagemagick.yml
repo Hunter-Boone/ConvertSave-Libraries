@@ -290,8 +290,9 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: imagemagick-macos-${{ matrix.arch }}
+          name: imagemagick-macos13-${{ matrix.arch }}
           path: imagemagick-macos-${{ matrix.arch }}.tar.gz
+          retention-days: 30
 
   # Windows build disabled - using official ImageMagick binaries instead
   # The official portable builds work well and building from source takes too long
@@ -386,6 +387,19 @@ jobs:
 
       - name: Display structure
         run: ls -R artifacts
+      
+      - name: Rename macOS 13 builds
+        run: |
+          cd artifacts
+          # Rename to indicate these are macOS 13 builds (won't work on macOS 11)
+          for file in imagemagick-macos13-*/imagemagick-*.tar.gz; do
+            if [ -f "$file" ]; then
+              newname=$(echo "$file" | sed 's/imagemagick-macos-/imagemagick-macos13-/')
+              mv "$file" "$newname"
+              echo "Renamed: $file -> $newname"
+            fi
+          done
+          ls -R
 
       - name: Create versioned release
         uses: softprops/action-gh-release@v1
@@ -396,18 +410,22 @@ jobs:
             ImageMagick ${{ needs.prepare.outputs.version }} built for ConvertSave
             
             ## Builds included:
-            - **macOS** (x86_64 and arm64) - Includes all dependencies bundled
+            - **macOS 13+** (x86_64 and arm64) - Built on GitHub Actions (macos-13)
+            - **macOS 11** (x86_64 and arm64) - Built locally on macOS 11 (manual upload)
             - **Linux** (x64)
             - **Windows** - Use official ImageMagick portable builds
             
-            ### macOS Features:
-            - Quantum depth: 16
-            - HDRI enabled
-            - Format support: JPEG, PNG, TIFF, WebP, GIF, BMP, and more
-            - All sub-libraries bundled (libjpeg, libpng, libtiff, libwebp, etc.)
-            - Uses @rpath for relocatable binaries
-            - Built with deployment target 11.0 for backward compatibility
-            - Note: HEIC and JPEG XL support excluded for macOS 11 compatibility
+            ### macOS 13+ Features (GitHub Actions builds):
+            - Quantum depth: 16, HDRI enabled
+            - Format support: JPEG, PNG, TIFF, WebP, GIF, BMP
+            - **No HEIC support** (libheif incompatible with macOS 11)
+            - Built with deployment target 11.0 but dependencies from macOS 13
+            
+            ### macOS 11 Features (manual builds):
+            - Quantum depth: 16, HDRI enabled
+            - Format support: JPEG, PNG, TIFF, WebP, **HEIC**, GIF, BMP
+            - **Full HEIC support** - all dependencies built on macOS 11
+            - Compatible with macOS 11.0+
             
             ### For Windows:
             Download from [ImageMagick.org](https://imagemagick.org/script/download.php#windows)
@@ -429,8 +447,16 @@ jobs:
             This release is automatically updated with the latest build.
             
             ## Files:
-            - `imagemagick-macos-x86_64.tar.gz` - Intel Macs (with all dependencies)
-            - `imagemagick-macos-arm64.tar.gz` - Apple Silicon (with all dependencies)
+            
+            ### macOS 11 Compatible (HEIC support ✅):
+            - `imagemagick-macos11-x86_64.tar.gz` - Intel Macs, built on macOS 11
+            - `imagemagick-macos11-arm64.tar.gz` - Apple Silicon, built on macOS 11
+            
+            ### macOS 13+ Only (no HEIC ❌):
+            - `imagemagick-macos13-x86_64.tar.gz` - Intel Macs, built on GitHub Actions
+            - `imagemagick-macos13-arm64.tar.gz` - Apple Silicon, built on GitHub Actions
+            
+            ### Other platforms:
             - `imagemagick-linux-x64.tar.gz` - Linux
             
             For Windows, use [official portable builds](https://imagemagick.org/script/download.php#windows)
