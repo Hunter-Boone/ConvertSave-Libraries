@@ -179,34 +179,43 @@ jobs:
           # Function to recursively copy all dylib dependencies
           copy_deps() {
             local binary="$1"
-            echo "Processing dependencies for: $binary"
+            local level="${2:-0}"
+            local indent=$(printf '%*s' $((level * 2)) '')
+            echo "${indent}Processing: $(basename $binary)"
             
             # Get all dylib dependencies (excluding system libraries)
-            otool -L "$binary" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+            otool -L "$binary" 2>/dev/null | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
               local dep_name=$(basename "$dep")
               local dest="package/lib/$dep_name"
               
               # Copy if not already present
-              if [ ! -f "$dest" ] && [ -f "$dep" ]; then
-                echo "  Copying dependency: $dep_name"
-                cp "$dep" "$dest"
-                
-                # Recursively process this dependency's dependencies
-                copy_deps "$dest"
+              if [ ! -f "$dest" ]; then
+                if [ -f "$dep" ]; then
+                  echo "${indent}  → Copying: $dep_name"
+                  cp "$dep" "$dest"
+                  
+                  # Recursively process this dependency's dependencies
+                  copy_deps "$dest" $((level + 1))
+                else
+                  echo "${indent}  ⚠ Not found: $dep"
+                fi
               fi
             done
           }
           
           # Copy all dependencies for magick binary
           echo "=== Copying dependencies for magick binary ==="
-          copy_deps "package/bin/magick"
+          copy_deps "package/bin/magick" 0
           
-          # Copy all dependencies for ImageMagick dylibs
-          echo "=== Copying dependencies for ImageMagick libraries ==="
-          for dylib in package/lib/*.dylib; do
-            if [ -f "$dylib" ]; then
-              copy_deps "$dylib"
-            fi
+          # Copy all dependencies for ImageMagick dylibs (need to loop multiple times to catch indirect deps)
+          echo "=== Copying dependencies for ImageMagick libraries (multiple passes) ==="
+          for pass in 1 2 3; do
+            echo "Pass $pass..."
+            for dylib in package/lib/*.dylib; do
+              if [ -f "$dylib" ]; then
+                copy_deps "$dylib" 0
+              fi
+            done
           done
           
           # List all libraries we're bundling
