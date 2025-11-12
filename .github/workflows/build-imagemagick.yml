@@ -92,7 +92,7 @@ jobs:
           export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
           export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
           
-          # Clone and build libheif (without video codecs to avoid C++ compatibility issues)
+          # Clone and build libheif (minimal build - just HEIC decoding)
           git clone --depth 1 --branch v1.19.5 https://github.com/strukturag/libheif.git
           cd libheif
           mkdir build && cd build
@@ -103,6 +103,8 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
             -DBUILD_SHARED_LIBS=ON \
             -DWITH_EXAMPLES=OFF \
+            -DWITH_JPEG_DECODER=OFF \
+            -DWITH_JPEG_ENCODER=OFF \
             -DWITH_LIBDE265=OFF \
             -DWITH_X265=OFF \
             -DWITH_AOM=OFF \
@@ -111,7 +113,7 @@ jobs:
           cmake --install .
           cd ../..
           
-          echo "✓ libheif built and installed (without video codecs)"
+          echo "✓ libheif built and installed (minimal build for HEIC support)"
 
       - name: Build libjxl from source for compatibility
         run: |
