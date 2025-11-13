@@ -44,7 +44,7 @@ jobs:
           # Construct download URL - try .tar.xz first (older versions), then .tar.gz (newer versions)
           DOWNLOAD_URL_XZ="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.xz"
           DOWNLOAD_URL_GZ="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
-          
+
           echo "Checking for .tar.xz version..."
           if curl --head --silent --fail "$DOWNLOAD_URL_XZ" > /dev/null; then
             DOWNLOAD_URL="$DOWNLOAD_URL_XZ"
@@ -60,7 +60,7 @@ jobs:
               exit 1
             fi
           fi
-          
+
           echo "download-url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
           echo "Will download from: $DOWNLOAD_URL"
 
@@ -643,19 +643,28 @@ jobs:
           DOWNLOAD_URL="${{ needs.prepare.outputs.download-url }}"
           VERSION="${{ needs.prepare.outputs.version }}"
 
+          # Detect file extension (.tar.xz for older versions like 7.1.1-47, .tar.gz for newer)
+          if [[ "$DOWNLOAD_URL" == *.tar.xz ]]; then
+            ARCHIVE="imagemagick.tar.xz"
+            EXTRACT_CMD="tar xJf"
+          else
+            ARCHIVE="imagemagick.tar.gz"
+            EXTRACT_CMD="tar xzf"
+          fi
+
           echo "Downloading from: $DOWNLOAD_URL"
-          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
+          curl -L -f --retry 3 --retry-delay 5 -o "$ARCHIVE" "$DOWNLOAD_URL"
 
           echo "Verifying download..."
-          FILE_SIZE=$(stat -c%s imagemagick.tar.gz)
-          if [ ! -f imagemagick.tar.gz ] || [ $FILE_SIZE -lt 10000 ]; then
+          FILE_SIZE=$(stat -c%s "$ARCHIVE")
+          if [ ! -f "$ARCHIVE" ] || [ $FILE_SIZE -lt 10000 ]; then
             echo "ERROR: Download failed or file is too small ($FILE_SIZE bytes)"
             exit 1
           fi
           echo "Downloaded $FILE_SIZE bytes"
 
-          echo "Extracting..."
-          tar xzf imagemagick.tar.gz
+          echo "Extracting with: $EXTRACT_CMD"
+          $EXTRACT_CMD "$ARCHIVE"
           mv ImageMagick-${VERSION} imagemagick-src
           echo "✓ Source code ready"
 
