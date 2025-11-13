@@ -204,7 +204,24 @@ jobs:
           cp bin/magick package/bin/
 
           # Copy ImageMagick libraries (including modules since we enabled them)
+          echo "=== Copying dylib files ==="
           cp -r lib/*.dylib package/lib/ || true
+          
+          echo "=== Checking for ImageMagick modules before copy ==="
+          if [ -d lib/ImageMagick-7.1.1/modules-Q16HDRI/coders ]; then
+            echo "Coders directory exists, listing first 10 files:"
+            ls -lh lib/ImageMagick-7.1.1/modules-Q16HDRI/coders/ | head -10
+            echo "Total .so files:"
+            find lib/ImageMagick-7.1.1/modules-Q16HDRI/coders/ -name "*.so" | wc -l
+            echo "Total .la files:"
+            find lib/ImageMagick-7.1.1/modules-Q16HDRI/coders/ -name "*.la" | wc -l
+          else
+            echo "ERROR: Coders directory not found!"
+            echo "Contents of lib/:"
+            ls -la lib/
+          fi
+          
+          echo "=== Copying ImageMagick modules ==="
           cp -r lib/ImageMagick-* package/lib/ || true
 
           # Copy configuration files
@@ -224,21 +241,30 @@ jobs:
             cp -r share/ImageMagick-7 package/share/
           fi
 
-          echo "=== Package contents ==="
-          echo "Modules before cleanup:"
-          find package/lib/ImageMagick-* -name "*.so" -o -name "*.la" 2>/dev/null | head -20 || echo "No modules found"
-
-          # Remove .la files - they're only used during build/link, not at runtime
-          # How to Convert's packages also have .la files with absolute paths but they work
-          # because ImageMagick only loads the .so/.dylib files at runtime
-          echo "=== Removing .la files (only .so/.dylib needed at runtime) ==="
-          if [ -d package/lib/ImageMagick-7.1.1 ]; then
-            find package/lib/ImageMagick-7.1.1 -name "*.la" -type f -delete
-            echo "✓ Removed .la files"
+          echo "=== Verifying packaged modules ==="
+          if [ -d package/lib/ImageMagick-7.1.1/modules-Q16HDRI/coders ]; then
+            echo "Packaged coders directory exists"
+            echo "Packaged .so files:"
+            SO_COUNT=$(find package/lib/ImageMagick-7.1.1/modules-Q16HDRI/coders/ -name "*.so" | wc -l)
+            echo "  Count: $SO_COUNT"
+            find package/lib/ImageMagick-7.1.1/modules-Q16HDRI/coders/ -name "*.so" | head -5
+            
+            echo "Packaged .la files:"
+            LA_COUNT=$(find package/lib/ImageMagick-7.1.1/modules-Q16HDRI/coders/ -name "*.la" | wc -l)
+            echo "  Count: $LA_COUNT"
+            find package/lib/ImageMagick-7.1.1/modules-Q16HDRI/coders/ -name "*.la" | head -5
+            
+            echo "Sample png module files:"
+            ls -lh package/lib/ImageMagick-7.1.1/modules-Q16HDRI/coders/png.* || echo "png module not found!"
+          else
+            echo "ERROR: Packaged coders directory not found!"
+            echo "Contents of package/lib:"
+            ls -la package/lib/
           fi
-
-          echo "Modules after cleanup:"
-          find package/lib/ImageMagick-* -type f 2>/dev/null | head -20 || echo "No modules found"
+          
+          # Keep .la files - ImageMagick uses them at runtime to find the actual .so files
+          # How to Convert's .la files also have absolute xcpkg paths, but they work because
+          # ImageMagick just uses the dlname field and looks for the .so in the same directory
 
           echo "=== Package structure ==="
           find package -type d | head -20
