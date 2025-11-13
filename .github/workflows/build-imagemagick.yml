@@ -800,19 +800,14 @@ jobs:
 
             ## Files:
 
-            ### macOS 11-12 (Big Sur, Monterey) - HEIC support ✅:
-            - `imagemagick-macos11-x86_64.tar.gz` - Intel Macs
-            - `imagemagick-macos11-arm64.tar.gz` - Apple Silicon
-            - Built on macOS 11 with dependencies compatible with older systems
-            - **Your app will auto-download these on macOS 11-12**
-
-            ### macOS 13+ - Latest Version (7.1.1-47 like How to Convert) ✅:
+            ### macOS 11+ - Latest Version (7.1.1-47 like How to Convert) ✅:
             - `imagemagick-macos13-x86_64.tar.gz` - Intel Macs (built on macos-13)
             - `imagemagick-macos13-arm64.tar.gz` - Apple Silicon (built on macos-14)
             - **Comprehensive format support**: HEIC, JPEG2000, OpenEXR, RAW, PDF, and more
             - **Advanced features**: Module system, OpenMP, Pango, LiquidRescale
             - Built exactly as How to Convert's xcpkg formula
-            - **Your app will auto-download these on macOS 13+**
+            - Built with MACOSX_DEPLOYMENT_TARGET=11.0 for compatibility
+            - **Your app will auto-download these on macOS 11+**
 
             ### Legacy Version (7.0.10-42 from 2020) 🕰️:
             - `imagemagick-7.0.10-42-macos-x86_64.tar.gz` - Intel build (works on both Intel and ARM)
