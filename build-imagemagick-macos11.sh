@@ -98,6 +98,24 @@ if [ -d share/ImageMagick-7 ]; then
     cp -r share/ImageMagick-7 package/share/
 fi
 
+# Fix .la files - rewrite absolute paths to be relative (like xcpkg pack does)
+echo "=== Fixing .la files for relocation ==="
+if [ -d package/lib/ImageMagick-7.1.1 ]; then
+    find package/lib/ImageMagick-7.1.1 -name "*.la" | while read la_file; do
+        if [ -f "$la_file" ]; then
+            echo "Fixing: $(basename $la_file)"
+            # Replace absolute build paths with @rpath or relative paths
+            # Fix libdir path
+            sed -i.bak "s|libdir='${PREFIX}/lib.*'|libdir='../../../lib'|g" "$la_file"
+            # Fix dependency_libs paths
+            sed -i.bak "s|${PREFIX}/lib|@rpath|g" "$la_file"
+            # Remove backup files
+            rm -f "${la_file}.bak"
+        fi
+    done
+    echo "✓ Fixed .la files for relocation"
+fi
+
 # Function to recursively copy all dylib dependencies
 copy_deps() {
     local binary="$1"
