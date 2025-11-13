@@ -4,7 +4,7 @@ set -e
 # Build ImageMagick on macOS 11 with full HEIC support
 # This script builds a fully portable ImageMagick with all dependencies bundled
 
-IMAGEMAGICK_VERSION="7.1.2-8"
+IMAGEMAGICK_VERSION="7.1.1-47"
 ARCH=$(uname -m)  # arm64 or x86_64
 BUILD_DIR="$PWD/build-$ARCH"
 PREFIX="$BUILD_DIR/imagemagick-install"
@@ -20,9 +20,9 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# Install Homebrew dependencies (these will be copied into the bundle)
+# Install Homebrew dependencies (matching How to Convert's xcpkg formula)
 echo "Installing dependencies via Homebrew..."
-brew install pkg-config libtool autoconf automake jpeg libpng libtiff webp libheif freetype openjpeg openexr ghostscript pango liblqr libraw
+brew install pkg-config libtool autoconf automake ghostscript libheif liblqr libraw jpeg libpng libtiff webp freetype openjpeg openexr pango
 
 # Determine Homebrew prefix
 if [ "$ARCH" = "arm64" ]; then
@@ -48,29 +48,25 @@ export CXXFLAGS="-I${BREW_PREFIX}/include"
     --prefix="$PREFIX" \
     --with-quantum-depth=16 \
     --enable-hdri \
-    --with-modules \
     --with-freetype=yes \
-    --with-jpeg=yes \
-    --with-png=yes \
-    --with-tiff=yes \
-    --with-webp=yes \
-    --with-heic=yes \
+    --with-gvc=no \
+    --with-modules \
     --with-openjp2 \
     --with-openexr \
+    --with-webp=yes \
+    --with-heic=yes \
     --with-gslib \
     --with-pango \
     --with-lqr \
     --with-raw=yes \
-    --without-gvc \
     --without-x \
     --without-wmf \
     --without-fftw \
-    --without-jxl \
     --disable-opencl \
     --enable-openmp \
+    --enable-delegate-build \
     --disable-static \
     --enable-shared \
-    --enable-delegate-build \
     --disable-dependency-tracking
 
 # Build and install

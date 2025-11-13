@@ -4,18 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       imagemagick-version:
-        description: 'ImageMagick version to build (e.g., 7.1.2-8)'
+        description: "ImageMagick version to build (e.g., 7.1.1-47)"
         required: true
-        default: '7.1.2-8'
+        default: "7.1.1-47"
       release-tag:
-        description: 'Release tag name (e.g., v1.0.0)'
+        description: "Release tag name (e.g., v1.0.0)"
         required: true
   schedule:
     # Run monthly to check for updates
-    - cron: '0 0 1 * *'
+    - cron: "0 0 1 * *"
 
 permissions:
-  contents: write  # Required to create releases and upload assets
+  contents: write # Required to create releases and upload assets
 
 jobs:
   prepare:
@@ -40,12 +40,12 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "release-tag=v$VERSION" >> $GITHUB_OUTPUT
           fi
-          
+
           # Construct download URL and verify it exists
           DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
           echo "download-url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
           echo "Will download from: $DOWNLOAD_URL"
-          
+
           # Verify URL exists (HEAD request)
           if ! curl --head --silent --fail "$DOWNLOAD_URL" > /dev/null; then
             echo "ERROR: Download URL does not exist: $DOWNLOAD_URL"
@@ -56,7 +56,8 @@ jobs:
 
   build-macos:
     needs: prepare
-    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-latest' }}
+    # Use macos-13 for Intel, macos-14 for ARM (matches How to Convert setup)
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-14' }}
     strategy:
       matrix:
         arch: [x86_64, arm64]
@@ -68,11 +69,13 @@ jobs:
         run: |
           # Install build tools
           brew install pkg-config libtool autoconf automake
-          
-          # Install comprehensive image format libraries
+
+          # Install dependencies matching How to Convert's xcpkg formula
+          # Core deps: ghostscript, libheif, liblqr, libltdl (from libtool), libraw
+          # Plus standard image libraries needed by ImageMagick
           brew install jpeg libpng libtiff webp libheif freetype openjpeg openexr \
             ghostscript pango liblqr libraw
-          
+
           # Verify libtool installation (provides libltdl)
           brew list libtool
           ls -la /opt/homebrew/opt/libtool/lib/ 2>/dev/null || ls -la /usr/local/opt/libtool/lib/
@@ -81,16 +84,16 @@ jobs:
         run: |
           DOWNLOAD_URL="${{ needs.prepare.outputs.download-url }}"
           VERSION="${{ needs.prepare.outputs.version }}"
-          
+
           echo "Downloading from: $DOWNLOAD_URL"
           curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
-          
+
           echo "Verifying download..."
           if [ ! -f imagemagick.tar.gz ] || [ $(stat -f%z imagemagick.tar.gz 2>/dev/null || stat -c%s imagemagick.tar.gz) -lt 10000 ]; then
             echo "ERROR: Download failed or file is too small"
             exit 1
           fi
-          
+
           echo "Extracting..."
           tar xzf imagemagick.tar.gz
           mv ImageMagick-${VERSION} imagemagick-src
@@ -99,10 +102,10 @@ jobs:
       - name: Configure ImageMagick
         run: |
           cd imagemagick-src
-          
+
           # Set minimum deployment target for backward compatibility
           export MACOSX_DEPLOYMENT_TARGET=11.0
-          
+
           # Set up paths for Homebrew libraries
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             BREW_PREFIX="/opt/homebrew"
@@ -111,47 +114,43 @@ jobs:
             BREW_PREFIX="/usr/local"
             ARCH_FLAGS="-arch x86_64"
           fi
-          
+
           export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
           export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
           export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
           export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/opt/libtool/lib/pkgconfig"
-          
+
           # Display environment for debugging
           echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
           echo "CFLAGS: $CFLAGS"
           echo "CXXFLAGS: $CXXFLAGS"
           echo "LDFLAGS: $LDFLAGS"
           echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
-          
-          # Configure with comprehensive format support (similar to How to Convert)
+
+          # Configure exactly as How to Convert does (from their xcpkg formula)
           ./configure \
             --prefix=$PWD/../imagemagick-build \
             --with-quantum-depth=16 \
             --enable-hdri \
-            --with-modules \
             --with-freetype=yes \
-            --with-jpeg=yes \
-            --with-png=yes \
-            --with-tiff=yes \
-            --with-webp=yes \
-            --with-heic=yes \
+            --with-gvc=no \
+            --with-modules \
             --with-openjp2 \
             --with-openexr \
+            --with-webp=yes \
+            --with-heic=yes \
             --with-gslib \
             --with-pango \
             --with-lqr \
             --with-raw=yes \
-            --without-gvc \
             --without-x \
             --without-wmf \
             --without-fftw \
-            --without-jxl \
             --disable-opencl \
             --enable-openmp \
+            --enable-delegate-build \
             --disable-static \
             --enable-shared \
-            --enable-delegate-build \
             --disable-dependency-tracking
 
       - name: Build ImageMagick
@@ -163,7 +162,7 @@ jobs:
         run: |
           cd imagemagick-src
           make install
-      
+
       - name: Verify HEIC support
         run: |
           cd imagemagick-build
@@ -178,17 +177,17 @@ jobs:
       - name: Package ImageMagick
         run: |
           cd imagemagick-build
-          
+
           # Create clean directory structure
           mkdir -p package/bin package/lib package/etc
-          
+
           # Copy binaries
           cp bin/magick package/bin/
-          
+
           # Copy ImageMagick libraries (including modules since we enabled them)
           cp -r lib/*.dylib package/lib/ || true
           cp -r lib/ImageMagick-* package/lib/ || true
-          
+
           # Copy configuration files
           echo "=== Checking for configuration files ==="
           if [ -d etc/ImageMagick-7 ]; then
@@ -198,23 +197,23 @@ jobs:
           else
             echo "WARNING: etc/ImageMagick-7 not found"
           fi
-          
+
           # Copy shared files if they exist
           if [ -d share/ImageMagick-7 ]; then
             echo "Copying ImageMagick shared files..."
             mkdir -p package/share
             cp -r share/ImageMagick-7 package/share/
           fi
-          
+
           echo "=== Package contents ==="
           echo "Modules:"
           find package/lib/ImageMagick-* -name "*.so" -o -name "*.la" 2>/dev/null | head -20 || echo "No modules found"
-          
+
           echo "=== Package structure ==="
           find package -type d | head -20
           echo "=== Configuration files ==="
           find package/etc -type f 2>/dev/null || echo "No etc directory"
-          
+
           # Function to recursively copy all dylib dependencies
           copy_deps() {
             local binary="$1"
@@ -260,11 +259,11 @@ jobs:
               fi
             done
           }
-          
+
           # Copy all dependencies for magick binary
           echo "=== Copying dependencies for magick binary ==="
           copy_deps "package/bin/magick" 0
-          
+
           # Copy all dependencies for ImageMagick dylibs (need to loop multiple times to catch indirect deps)
           echo "=== Copying dependencies for ImageMagick libraries (multiple passes) ==="
           for pass in 1 2 3; do
@@ -275,11 +274,11 @@ jobs:
               fi
             done
           done
-          
+
           # List all libraries we're bundling
           echo "=== Bundled libraries ==="
           ls -lh package/lib/*.dylib
-          
+
           # Fix library paths to use @rpath
           echo "=== Fixing library paths ==="
           for dylib in package/lib/*.dylib; do
@@ -295,23 +294,23 @@ jobs:
               done
             fi
           done
-          
+
           # Fix magick binary to use @rpath
           echo "=== Fixing magick binary paths ==="
           otool -L package/bin/magick | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
             install_name_tool -change "$dep" "@rpath/$(basename $dep)" package/bin/magick 2>/dev/null || true
           done
-          
+
           # Add @rpath to magick binary
           install_name_tool -add_rpath "@executable_path/../lib" package/bin/magick
-          
+
           # Verify the binary can find its libraries
           echo "=== Verifying magick binary ==="
           otool -L package/bin/magick
-          
+
           echo "=== Sample library dependencies ==="
           otool -L package/lib/libMagickCore-7.Q16HDRI.dylib | head -20
-          
+
           # Create tarball
           cd package
           tar czf ../../imagemagick-macos-${{ matrix.arch }}.tar.gz .
@@ -342,16 +341,16 @@ jobs:
         run: |
           # Install build tools
           brew install pkg-config libtool autoconf automake
-          
+
           # Install only basic/stable image format libraries (avoid newer APIs)
           # Use system libjpeg or older versions that are more compatible
           brew install libpng libtiff webp freetype
-          
+
           # Skip problematic newer libraries for old ImageMagick:
           # - libjpeg (use system or simpler build)
           # - libheif (too new, has libx265 issues anyway)
           # - openjpeg, openexr, pango, liblqr, libraw (newer APIs)
-          
+
           # Verify libtool installation (provides libltdl)
           brew list libtool
           ls -la /opt/homebrew/opt/libtool/lib/ 2>/dev/null || ls -la /usr/local/opt/libtool/lib/
@@ -360,16 +359,16 @@ jobs:
         run: |
           VERSION="7.0.10-42"
           DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.xz"
-          
+
           echo "Downloading ImageMagick ${VERSION} from: $DOWNLOAD_URL"
           curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.xz "$DOWNLOAD_URL"
-          
+
           echo "Verifying download..."
           if [ ! -f imagemagick.tar.xz ] || [ $(stat -f%z imagemagick.tar.xz 2>/dev/null || stat -c%s imagemagick.tar.xz) -lt 10000 ]; then
             echo "ERROR: Download failed or file is too small"
             exit 1
           fi
-          
+
           echo "Extracting..."
           tar xJf imagemagick.tar.xz
           mv ImageMagick-${VERSION} imagemagick-src
@@ -378,26 +377,26 @@ jobs:
       - name: Configure ImageMagick 7.0.10-42
         run: |
           cd imagemagick-src
-          
+
           # Set minimum deployment target for backward compatibility
           export MACOSX_DEPLOYMENT_TARGET=11.0
-          
+
           # Set up paths for Homebrew libraries (macOS 13 Intel runner)
           BREW_PREFIX="/usr/local"
           ARCH_FLAGS="-arch x86_64"
-          
+
           export CFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
           export LDFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -L${BREW_PREFIX}/lib"
           export CXXFLAGS="$ARCH_FLAGS -mmacosx-version-min=11.0 -I${BREW_PREFIX}/include"
           export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/opt/libtool/lib/pkgconfig"
-          
+
           # Display environment for debugging
           echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
           echo "CFLAGS: $CFLAGS"
           echo "CXXFLAGS: $CXXFLAGS"
           echo "LDFLAGS: $LDFLAGS"
           echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
-          
+
           # Configure with basic format support (avoid newer APIs)
           # Minimal configuration to work with old ImageMagick + newer dependencies
           ./configure \
@@ -437,7 +436,7 @@ jobs:
         run: |
           cd imagemagick-src
           make install
-      
+
       - name: Verify build
         run: |
           cd imagemagick-build
@@ -448,17 +447,17 @@ jobs:
       - name: Package ImageMagick 7.0.10-42
         run: |
           cd imagemagick-build
-          
+
           # Create clean directory structure
           mkdir -p package/bin package/lib package/etc
-          
+
           # Copy binaries
           cp bin/magick package/bin/
-          
+
           # Copy ImageMagick libraries (including modules since we enabled them)
           cp -r lib/*.dylib package/lib/ || true
           cp -r lib/ImageMagick-* package/lib/ || true
-          
+
           # Copy configuration files
           echo "=== Checking for configuration files ==="
           if [ -d etc/ImageMagick-7 ]; then
@@ -468,23 +467,23 @@ jobs:
           else
             echo "WARNING: etc/ImageMagick-7 not found"
           fi
-          
+
           # Copy shared files if they exist
           if [ -d share/ImageMagick-7 ]; then
             echo "Copying ImageMagick shared files..."
             mkdir -p package/share
             cp -r share/ImageMagick-7 package/share/
           fi
-          
+
           echo "=== Package contents ==="
           echo "Modules:"
           find package/lib/ImageMagick-* -name "*.so" -o -name "*.la" 2>/dev/null | head -20 || echo "No modules found"
-          
+
           echo "=== Package structure ==="
           find package -type d | head -20
           echo "=== Configuration files ==="
           find package/etc -type f 2>/dev/null || echo "No etc directory"
-          
+
           # Function to recursively copy all dylib dependencies
           copy_deps() {
             local binary="$1"
@@ -526,11 +525,11 @@ jobs:
               fi
             done
           }
-          
+
           # Copy all dependencies for magick binary
           echo "=== Copying dependencies for magick binary ==="
           copy_deps "package/bin/magick" 0
-          
+
           # Copy all dependencies for ImageMagick dylibs (need to loop multiple times to catch indirect deps)
           echo "=== Copying dependencies for ImageMagick libraries (multiple passes) ==="
           for pass in 1 2 3; do
@@ -541,11 +540,11 @@ jobs:
               fi
             done
           done
-          
+
           # List all libraries we're bundling
           echo "=== Bundled libraries ==="
           ls -lh package/lib/*.dylib
-          
+
           # Fix library paths to use @rpath
           echo "=== Fixing library paths ==="
           for dylib in package/lib/*.dylib; do
@@ -561,23 +560,23 @@ jobs:
               done
             fi
           done
-          
+
           # Fix magick binary to use @rpath
           echo "=== Fixing magick binary paths ==="
           otool -L package/bin/magick | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
             install_name_tool -change "$dep" "@rpath/$(basename $dep)" package/bin/magick 2>/dev/null || true
           done
-          
+
           # Add @rpath to magick binary
           install_name_tool -add_rpath "@executable_path/../lib" package/bin/magick
-          
+
           # Verify the binary can find its libraries
           echo "=== Verifying magick binary ==="
           otool -L package/bin/magick
-          
+
           echo "=== Sample library dependencies ==="
           otool -L package/lib/libMagickCore-7.Q16HDRI.dylib | head -20
-          
+
           # Create tarball with version in filename
           cd package
           tar czf ../../imagemagick-7.0.10-42-macos-x86_64.tar.gz .
@@ -624,10 +623,10 @@ jobs:
         run: |
           DOWNLOAD_URL="${{ needs.prepare.outputs.download-url }}"
           VERSION="${{ needs.prepare.outputs.version }}"
-          
+
           echo "Downloading from: $DOWNLOAD_URL"
           curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
-          
+
           echo "Verifying download..."
           FILE_SIZE=$(stat -c%s imagemagick.tar.gz)
           if [ ! -f imagemagick.tar.gz ] || [ $FILE_SIZE -lt 10000 ]; then
@@ -635,7 +634,7 @@ jobs:
             exit 1
           fi
           echo "Downloaded $FILE_SIZE bytes"
-          
+
           echo "Extracting..."
           tar xzf imagemagick.tar.gz
           mv ImageMagick-${VERSION} imagemagick-src
@@ -644,7 +643,7 @@ jobs:
       - name: Build ImageMagick
         run: |
           cd imagemagick-src
-          
+
           # Configure with comprehensive format support (matching macOS build)
           ./configure \
             --prefix=$PWD/../imagemagick-build \
@@ -672,7 +671,7 @@ jobs:
             --disable-static \
             --enable-shared \
             --enable-delegate-build
-          
+
           make -j$(nproc)
           make install
 
@@ -699,11 +698,11 @@ jobs:
 
       - name: Display structure
         run: ls -R artifacts
-      
+
       - name: Rename and organize builds
         run: |
           cd artifacts
-          
+
           # Rename current version builds to indicate macOS 13
           for file in imagemagick-macos13-*/imagemagick-*.tar.gz; do
             if [ -f "$file" ] && [[ ! "$file" =~ 7\.0\.10-42 ]]; then
@@ -712,7 +711,7 @@ jobs:
               echo "Renamed: $file -> $newname"
             fi
           done
-          
+
           # Move legacy builds to root (they already have version in filename)
           for file in imagemagick-legacy-*/imagemagick-7.0.10-42-*.tar.gz; do
             if [ -f "$file" ]; then
@@ -721,7 +720,7 @@ jobs:
               echo "Moved legacy: $file -> $newname"
             fi
           done
-          
+
           ls -R
 
       - name: Create versioned release
@@ -731,13 +730,13 @@ jobs:
           name: ImageMagick ${{ needs.prepare.outputs.version }}
           body: |
             ImageMagick ${{ needs.prepare.outputs.version }} built for ConvertSave
-            
+
             ## Builds included:
             - **macOS 13+** (x86_64 and arm64) - Built on GitHub Actions (macos-13)
             - **macOS 11** (x86_64 and arm64) - Built locally on macOS 11 (manual upload)
             - **Linux** (x64)
             - **Windows** - Use official ImageMagick portable builds
-            
+
             ### macOS 13+ Features (GitHub Actions builds):
             - Quantum depth: 16, HDRI enabled, OpenMP support
             - Module system enabled for dynamic format loading
@@ -745,13 +744,13 @@ jobs:
             - Advanced features: Pango text rendering, LiquidRescale, Ghostscript support
             - Built on: macOS 13 Ventura
             - Works on: macOS 13+ (Ventura and later)
-            
+
             ### macOS 11 Features (manual builds):
             - Quantum depth: 16, HDRI enabled
             - Format support: JPEG, PNG, TIFF, WebP, **HEIC**, GIF, BMP, and more
             - **Full HEIC support** - all dependencies built on macOS 11
             - Works on: macOS 11 Big Sur and macOS 12 Monterey
-            
+
             ### For Windows:
             Download from [ImageMagick.org](https://imagemagick.org/script/download.php#windows)
           files: |
@@ -760,7 +759,7 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Update 'latest' release
         uses: softprops/action-gh-release@v1
         with:
@@ -768,36 +767,36 @@ jobs:
           name: Latest ImageMagick Build
           body: |
             Latest ImageMagick build for ConvertSave (v${{ needs.prepare.outputs.version }})
-            
+
             This release is automatically updated with the latest build.
-            
+
             ## Files:
-            
+
             ### macOS 11-12 (Big Sur, Monterey) - HEIC support ✅:
             - `imagemagick-macos11-x86_64.tar.gz` - Intel Macs
             - `imagemagick-macos11-arm64.tar.gz` - Apple Silicon
             - Built on macOS 11 with dependencies compatible with older systems
             - **Your app will auto-download these on macOS 11-12**
-            
-            ### macOS 13+ (Ventura and later) - Latest Version ✅:
-            - `imagemagick-macos13-x86_64.tar.gz` - Intel Macs (Latest: v${{ needs.prepare.outputs.version }})
-            - `imagemagick-macos13-arm64.tar.gz` - Apple Silicon (Latest: v${{ needs.prepare.outputs.version }})
+
+            ### macOS 13+ - Latest Version (7.1.1-47 like How to Convert) ✅:
+            - `imagemagick-macos13-x86_64.tar.gz` - Intel Macs (built on macos-13)
+            - `imagemagick-macos13-arm64.tar.gz` - Apple Silicon (built on macos-14)
             - **Comprehensive format support**: HEIC, JPEG2000, OpenEXR, RAW, PDF, and more
             - **Advanced features**: Module system, OpenMP, Pango, LiquidRescale
-            - Built on GitHub Actions with all dependencies bundled
+            - Built exactly as How to Convert's xcpkg formula
             - **Your app will auto-download these on macOS 13+**
-            
+
             ### Legacy Version (7.0.10-42 from 2020) 🕰️:
             - `imagemagick-7.0.10-42-macos-x86_64.tar.gz` - Intel build (works on both Intel and ARM)
             - Old stable version for compatibility testing
             - **Basic format support only** (PNG, TIFF, WebP, FreeType) - no JPEG/HEIC to avoid API conflicts
             - Single build for simplicity and compatibility
-            
+
             ### Linux:
             - `imagemagick-linux-x64.tar.gz`
             - **Comprehensive format support**: HEIC, JPEG2000, OpenEXR, RAW, PDF, and more
             - **Advanced features**: Module system, OpenMP, Pango, LiquidRescale
-            
+
             ### Windows:
             Use [official portable builds](https://imagemagick.org/script/download.php#windows)
           files: |
@@ -806,4 +805,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
