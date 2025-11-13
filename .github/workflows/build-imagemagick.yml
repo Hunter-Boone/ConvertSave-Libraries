@@ -225,45 +225,25 @@ jobs:
           fi
 
           echo "=== Package contents ==="
-          echo "Modules:"
+          echo "Modules before cleanup:"
           find package/lib/ImageMagick-* -name "*.so" -o -name "*.la" 2>/dev/null | head -20 || echo "No modules found"
+
+          # Remove .la files - they're only used during build/link, not at runtime
+          # How to Convert's packages also have .la files with absolute paths but they work
+          # because ImageMagick only loads the .so/.dylib files at runtime
+          echo "=== Removing .la files (only .so/.dylib needed at runtime) ==="
+          if [ -d package/lib/ImageMagick-7.1.1 ]; then
+            find package/lib/ImageMagick-7.1.1 -name "*.la" -type f -delete
+            echo "✓ Removed .la files"
+          fi
+
+          echo "Modules after cleanup:"
+          find package/lib/ImageMagick-* -type f 2>/dev/null | head -20 || echo "No modules found"
 
           echo "=== Package structure ==="
           find package -type d | head -20
           echo "=== Configuration files ==="
           find package/etc -type f 2>/dev/null || echo "No etc directory"
-
-          # Fix .la files - rewrite absolute paths to be relative (like xcpkg pack does)
-          echo "=== Fixing .la files for relocation ==="
-          if [ -d package/lib/ImageMagick-7.1.1 ]; then
-            find package/lib/ImageMagick-7.1.1 -name "*.la" | while read la_file; do
-              if [ -f "$la_file" ]; then
-                echo "Fixing: $(basename $la_file)"
-                echo "Before:"
-                grep "^libdir=" "$la_file" || true
-                
-                # Replace any absolute path in libdir with relative path
-                # This matches any libdir='/absolute/path/...' and replaces with libdir='../../../lib'
-                sed -i.bak "s|^libdir='/.*'|libdir='../../../lib'|g" "$la_file"
-                
-                # Replace absolute paths in dependency_libs
-                # Remove any absolute paths starting with /Users, /opt, /usr/local (keep system paths like /usr/lib)
-                sed -i.bak "s| /Users/[^ ]*\.la| |g" "$la_file"
-                sed -i.bak "s| /opt/[^ ]*\.la| |g" "$la_file"
-                sed -i.bak "s| /usr/local/[^ ]*\.la| |g" "$la_file"
-                
-                # Also remove -L flags with absolute paths to build dirs
-                sed -i.bak "s|-L/Users/[^ ]*||g" "$la_file"
-                
-                echo "After:"
-                grep "^libdir=" "$la_file" || true
-                
-                # Remove backup files
-                rm -f "${la_file}.bak"
-              fi
-            done
-            echo "✓ Fixed .la files for relocation"
-          fi
 
           # Function to recursively copy all dylib dependencies
           copy_deps() {
