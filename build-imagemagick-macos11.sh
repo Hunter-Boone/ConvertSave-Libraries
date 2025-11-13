@@ -33,8 +33,11 @@ fi
 
 # Download ImageMagick source
 echo "Downloading ImageMagick source..."
-curl -L "https://imagemagick.org/archive/releases/ImageMagick-${IMAGEMAGICK_VERSION}.tar.gz" -o imagemagick.tar.gz
-tar xzf imagemagick.tar.gz
+# Version 7.1.1-47 uses .tar.xz, newer versions use .tar.gz
+DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${IMAGEMAGICK_VERSION}.tar.xz"
+echo "Downloading from: $DOWNLOAD_URL"
+curl -L "$DOWNLOAD_URL" -o imagemagick.tar.xz
+tar xJf imagemagick.tar.xz
 cd "ImageMagick-${IMAGEMAGICK_VERSION}"
 
 # Configure with all format support

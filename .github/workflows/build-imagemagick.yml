@@ -41,18 +41,28 @@ jobs:
             echo "release-tag=v$VERSION" >> $GITHUB_OUTPUT
           fi
 
-          # Construct download URL and verify it exists
-          DOWNLOAD_URL="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          # Construct download URL - try .tar.xz first (older versions), then .tar.gz (newer versions)
+          DOWNLOAD_URL_XZ="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.xz"
+          DOWNLOAD_URL_GZ="https://imagemagick.org/archive/releases/ImageMagick-${VERSION}.tar.gz"
+          
+          echo "Checking for .tar.xz version..."
+          if curl --head --silent --fail "$DOWNLOAD_URL_XZ" > /dev/null; then
+            DOWNLOAD_URL="$DOWNLOAD_URL_XZ"
+            echo "✓ Found .tar.xz version"
+          else
+            echo "Checking for .tar.gz version..."
+            if curl --head --silent --fail "$DOWNLOAD_URL_GZ" > /dev/null; then
+              DOWNLOAD_URL="$DOWNLOAD_URL_GZ"
+              echo "✓ Found .tar.gz version"
+            else
+              echo "ERROR: Neither .tar.xz nor .tar.gz found for version $VERSION"
+              echo "Available versions at https://imagemagick.org/archive/releases/"
+              exit 1
+            fi
+          fi
+          
           echo "download-url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
           echo "Will download from: $DOWNLOAD_URL"
-
-          # Verify URL exists (HEAD request)
-          if ! curl --head --silent --fail "$DOWNLOAD_URL" > /dev/null; then
-            echo "ERROR: Download URL does not exist: $DOWNLOAD_URL"
-            echo "Available versions at https://imagemagick.org/archive/releases/"
-            exit 1
-          fi
-          echo "✓ Download URL verified"
 
   build-macos:
     needs: prepare
@@ -85,17 +95,26 @@ jobs:
           DOWNLOAD_URL="${{ needs.prepare.outputs.download-url }}"
           VERSION="${{ needs.prepare.outputs.version }}"
 
+          # Detect file extension (.tar.xz for older versions like 7.1.1-47, .tar.gz for newer)
+          if [[ "$DOWNLOAD_URL" == *.tar.xz ]]; then
+            ARCHIVE="imagemagick.tar.xz"
+            EXTRACT_CMD="tar xJf"
+          else
+            ARCHIVE="imagemagick.tar.gz"
+            EXTRACT_CMD="tar xzf"
+          fi
+
           echo "Downloading from: $DOWNLOAD_URL"
-          curl -L -f --retry 3 --retry-delay 5 -o imagemagick.tar.gz "$DOWNLOAD_URL"
+          curl -L -f --retry 3 --retry-delay 5 -o "$ARCHIVE" "$DOWNLOAD_URL"
 
           echo "Verifying download..."
-          if [ ! -f imagemagick.tar.gz ] || [ $(stat -f%z imagemagick.tar.gz 2>/dev/null || stat -c%s imagemagick.tar.gz) -lt 10000 ]; then
+          if [ ! -f "$ARCHIVE" ] || [ $(stat -f%z "$ARCHIVE" 2>/dev/null || stat -c%s "$ARCHIVE") -lt 10000 ]; then
             echo "ERROR: Download failed or file is too small"
             exit 1
           fi
 
-          echo "Extracting..."
-          tar xzf imagemagick.tar.gz
+          echo "Extracting with: $EXTRACT_CMD"
+          $EXTRACT_CMD "$ARCHIVE"
           mv ImageMagick-${VERSION} imagemagick-src
           echo "✓ Source code ready"
 
