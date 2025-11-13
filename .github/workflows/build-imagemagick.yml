@@ -235,16 +235,29 @@ jobs:
 
           # Fix .la files - rewrite absolute paths to be relative (like xcpkg pack does)
           echo "=== Fixing .la files for relocation ==="
-          BUILD_DIR="$PWD"
           if [ -d package/lib/ImageMagick-7.1.1 ]; then
             find package/lib/ImageMagick-7.1.1 -name "*.la" | while read la_file; do
               if [ -f "$la_file" ]; then
                 echo "Fixing: $(basename $la_file)"
-                # Replace absolute build paths with @rpath or relative paths
-                # Fix libdir path
-                sed -i.bak "s|libdir='${BUILD_DIR}/lib.*'|libdir='../../../lib'|g" "$la_file"
-                # Fix dependency_libs paths
-                sed -i.bak "s|${BUILD_DIR}/lib|@rpath|g" "$la_file"
+                echo "Before:"
+                grep "^libdir=" "$la_file" || true
+                
+                # Replace any absolute path in libdir with relative path
+                # This matches any libdir='/absolute/path/...' and replaces with libdir='../../../lib'
+                sed -i.bak "s|^libdir='/.*'|libdir='../../../lib'|g" "$la_file"
+                
+                # Replace absolute paths in dependency_libs
+                # Remove any absolute paths starting with /Users, /opt, /usr/local (keep system paths like /usr/lib)
+                sed -i.bak "s| /Users/[^ ]*\.la| |g" "$la_file"
+                sed -i.bak "s| /opt/[^ ]*\.la| |g" "$la_file"
+                sed -i.bak "s| /usr/local/[^ ]*\.la| |g" "$la_file"
+                
+                # Also remove -L flags with absolute paths to build dirs
+                sed -i.bak "s|-L/Users/[^ ]*||g" "$la_file"
+                
+                echo "After:"
+                grep "^libdir=" "$la_file" || true
+                
                 # Remove backup files
                 rm -f "${la_file}.bak"
               fi
