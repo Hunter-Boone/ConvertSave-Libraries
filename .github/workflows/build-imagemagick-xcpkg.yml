@@ -21,33 +21,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install xcpkg
+      - name: Setup xcpkg
         run: |
-          echo "Installing xcpkg..."
           curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
-          chmod +x xcpkg
-          sudo mv xcpkg /usr/local/bin/
+          chmod a+x xcpkg
+          ./xcpkg setup
+          ./xcpkg update
           
-          xcpkg setup
-          xcpkg --version
-          
-          # Show xcpkg help to understand commands
-          echo "=== xcpkg help ==="
-          xcpkg --help || xcpkg help || true
-          
-          # Show available commands
-          echo "=== xcpkg commands ==="
-          xcpkg 2>&1 | head -50 || true
-          
-          # Show our formula
-          echo "=== Our imagemagick formula ==="
-          cat imagemagick.yml
-          echo ""
-          echo "We'll use -I . to tell xcpkg to search for formulas in current directory"
-
-      - name: Build ImageMagick with xcpkg
+      - name: Install custom imagemagick formula
         run: |
-          # Determine platform target
+          # Download imagemagick formula from How to Convert's repository
+          mkdir -p ~/.xcpkg/repos.d/official-core/formula
+          curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml \
+            https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
+          
+          echo "=== Installed imagemagick formula ==="
+          cat ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+
+      - name: Build and Pack ImageMagick
+        run: |
+          # Determine platform target (matching How to Convert's setup)
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             TARGET="MacOSX-14.0-arm64"
           else
@@ -56,21 +49,11 @@ jobs:
           
           echo "Building for target: $TARGET"
           
-          # Install ImageMagick using -I to specify current directory as formula search path
-          echo "Installing ImageMagick with custom formula..."
-          xcpkg install $TARGET/imagemagick -I .
+          # Install ImageMagick (builds it with all dependencies)
+          ./xcpkg install $TARGET/imagemagick --profile=release
           
-      - name: Package ImageMagick
-        run: |
-          # Determine platform target
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            TARGET="MacOSX-14.0-arm64"
-          else
-            TARGET="MacOSX-13.0-x86_64"
-          fi
-          
-          # Bundle the build using xcpkg (this creates a relocatable archive)
-          xcpkg bundle $TARGET/imagemagick .tar.gz
+          # Pack into relocatable archive
+          ./xcpkg pack $TARGET/imagemagick -t tar.gz -o .
           
           # Rename to our naming convention
           mv imagemagick-*.tar.gz imagemagick-macos-${{ matrix.arch }}.tar.gz || \
