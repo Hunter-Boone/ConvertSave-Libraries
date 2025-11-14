@@ -27,7 +27,7 @@ jobs:
   build-x86_64:
     needs: prepare
     runs-on: macos-13
-    
+
     env:
       XCPKG_COMPILER_C: /usr/bin/clang
       XCPKG_COMPILER_CXX: /usr/bin/clang++
@@ -35,10 +35,10 @@ jobs:
       XCPKG_NATIVE_COMPILER_C: /usr/bin/clang
       XCPKG_NATIVE_COMPILER_CXX: /usr/bin/clang++
       XCPKG_NATIVE_COMPILER_ARGS: -arch x86_64 -mmacosx-version-min=13.0
-    
+
     steps:
       - run: export -p
-      
+
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
@@ -64,7 +64,7 @@ jobs:
   build-arm64:
     needs: prepare
     runs-on: macos-14
-    
+
     env:
       XCPKG_COMPILER_C: /usr/bin/clang
       XCPKG_COMPILER_CXX: /usr/bin/clang++
@@ -72,10 +72,10 @@ jobs:
       XCPKG_NATIVE_COMPILER_C: /usr/bin/clang
       XCPKG_NATIVE_COMPILER_CXX: /usr/bin/clang++
       XCPKG_NATIVE_COMPILER_ARGS: -arch arm64 -mmacosx-version-min=14.0
-    
+
     steps:
       - run: export -p
-      
+
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
