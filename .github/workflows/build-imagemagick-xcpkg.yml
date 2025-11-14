@@ -41,35 +41,63 @@ jobs:
           mkdir -p ~/.xcpkg/repos.d/official-core/formula
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
 
-      - name: Configure and verify compiler environment
+      - name: Patch xcpkg wrapper scripts to use clang directly
         run: |
           SDK_PATH="$(xcrun --show-sdk-path)"
           echo "SDK Path: $SDK_PATH"
-
-          # Write environment to a file that will be sourced by all shell commands
-          cat >> ~/.bashrc << EOF
-          export XCPKG_COMPILER_C="/usr/bin/clang"
-          export XCPKG_COMPILER_CXX="/usr/bin/clang++"
-          export XCPKG_SDK_ROOT="$SDK_PATH"
-          export XCPKG_COMPILER_ARGS="-arch x86_64 -mmacosx-version-min=13.0 -isysroot $SDK_PATH"
-          export XCPKG_NATIVE_COMPILER_C="/usr/bin/clang"
-          export XCPKG_NATIVE_COMPILER_CXX="/usr/bin/clang++"
-          export XCPKG_NATIVE_COMPILER_ARGS="-arch x86_64 -mmacosx-version-min=13.0 -isysroot $SDK_PATH"
-          EOF
-
-          source ~/.bashrc
-
-          echo "Verifying environment variables:"
-          echo "XCPKG_COMPILER_C=$XCPKG_COMPILER_C"
-          echo "XCPKG_COMPILER_ARGS=$XCPKG_COMPILER_ARGS"
-          echo "XCPKG_NATIVE_COMPILER_C=$XCPKG_NATIVE_COMPILER_C"
-          echo "XCPKG_NATIVE_COMPILER_ARGS=$XCPKG_NATIVE_COMPILER_ARGS"
+          
+          # Replace wrapper-native-cc with direct clang invocation
+          cat > ~/.xcpkg/core/wrapper-native-cc << 'EOF'
+#!/bin/sh
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
+if [ -n "$SDK_PATH" ]; then
+  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"
+else
+  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 "$@"
+fi
+EOF
+          chmod +x ~/.xcpkg/core/wrapper-native-cc
+          
+          # Replace wrapper-native-c++ with direct clang++ invocation
+          cat > ~/.xcpkg/core/wrapper-native-c++ << 'EOF'
+#!/bin/sh
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
+if [ -n "$SDK_PATH" ]; then
+  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"
+else
+  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 "$@"
+fi
+EOF
+          chmod +x ~/.xcpkg/core/wrapper-native-c++
+          
+          # Replace wrapper-target-cc with direct clang invocation
+          cat > ~/.xcpkg/core/wrapper-target-cc << 'EOF'
+#!/bin/sh
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
+if [ -n "$SDK_PATH" ]; then
+  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"
+else
+  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 "$@"
+fi
+EOF
+          chmod +x ~/.xcpkg/core/wrapper-target-cc
+          
+          # Replace wrapper-target-c++ with direct clang++ invocation
+          cat > ~/.xcpkg/core/wrapper-target-c++ << 'EOF'
+#!/bin/sh
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
+if [ -n "$SDK_PATH" ]; then
+  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"
+else
+  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 "$@"
+fi
+EOF
+          chmod +x ~/.xcpkg/core/wrapper-target-c++
+          
+          echo "Wrapper scripts patched successfully"
 
       - name: Build ImageMagick with xcpkg
-        shell: bash -leo pipefail {0}
-        run: |
-          source ~/.bashrc
-          ./xcpkg install MacOSX-13.0-x86_64/imagemagick --profile=release
+        run: ./xcpkg install MacOSX-13.0-x86_64/imagemagick --profile=release
 
       - run: ./xcpkg pack MacOSX-13.0-x86_64/imagemagick -t tar.gz -o .
 
@@ -97,35 +125,63 @@ jobs:
           mkdir -p ~/.xcpkg/repos.d/official-core/formula
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
 
-      - name: Configure and verify compiler environment
+      - name: Patch xcpkg wrapper scripts to use clang directly
         run: |
           SDK_PATH="$(xcrun --show-sdk-path)"
           echo "SDK Path: $SDK_PATH"
-
-          # Write environment to a file that will be sourced by all shell commands
-          cat >> ~/.bashrc << EOF
-          export XCPKG_COMPILER_C="/usr/bin/clang"
-          export XCPKG_COMPILER_CXX="/usr/bin/clang++"
-          export XCPKG_SDK_ROOT="$SDK_PATH"
-          export XCPKG_COMPILER_ARGS="-arch arm64 -mmacosx-version-min=14.0 -isysroot $SDK_PATH"
-          export XCPKG_NATIVE_COMPILER_C="/usr/bin/clang"
-          export XCPKG_NATIVE_COMPILER_CXX="/usr/bin/clang++"
-          export XCPKG_NATIVE_COMPILER_ARGS="-arch arm64 -mmacosx-version-min=14.0 -isysroot $SDK_PATH"
-          EOF
-
-          source ~/.bashrc
-
-          echo "Verifying environment variables:"
-          echo "XCPKG_COMPILER_C=$XCPKG_COMPILER_C"
-          echo "XCPKG_COMPILER_ARGS=$XCPKG_COMPILER_ARGS"
-          echo "XCPKG_NATIVE_COMPILER_C=$XCPKG_NATIVE_COMPILER_C"
-          echo "XCPKG_NATIVE_COMPILER_ARGS=$XCPKG_NATIVE_COMPILER_ARGS"
+          
+          # Replace wrapper-native-cc with direct clang invocation
+          cat > ~/.xcpkg/core/wrapper-native-cc << 'EOF'
+#!/bin/sh
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
+if [ -n "$SDK_PATH" ]; then
+  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"
+else
+  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 "$@"
+fi
+EOF
+          chmod +x ~/.xcpkg/core/wrapper-native-cc
+          
+          # Replace wrapper-native-c++ with direct clang++ invocation
+          cat > ~/.xcpkg/core/wrapper-native-c++ << 'EOF'
+#!/bin/sh
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
+if [ -n "$SDK_PATH" ]; then
+  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"
+else
+  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 "$@"
+fi
+EOF
+          chmod +x ~/.xcpkg/core/wrapper-native-c++
+          
+          # Replace wrapper-target-cc with direct clang invocation
+          cat > ~/.xcpkg/core/wrapper-target-cc << 'EOF'
+#!/bin/sh
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
+if [ -n "$SDK_PATH" ]; then
+  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"
+else
+  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 "$@"
+fi
+EOF
+          chmod +x ~/.xcpkg/core/wrapper-target-cc
+          
+          # Replace wrapper-target-c++ with direct clang++ invocation
+          cat > ~/.xcpkg/core/wrapper-target-c++ << 'EOF'
+#!/bin/sh
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
+if [ -n "$SDK_PATH" ]; then
+  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"
+else
+  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 "$@"
+fi
+EOF
+          chmod +x ~/.xcpkg/core/wrapper-target-c++
+          
+          echo "Wrapper scripts patched successfully"
 
       - name: Build ImageMagick with xcpkg
-        shell: bash -leo pipefail {0}
-        run: |
-          source ~/.bashrc
-          ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
+        run: ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
 
       - run: ./xcpkg pack MacOSX-14.0-arm64/imagemagick -t tar.gz -o .
 
