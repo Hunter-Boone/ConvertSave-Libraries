@@ -4,28 +4,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        arch: [x86_64, arm64]
-
-    steps:
-      - id: prepare
-        run: |
-          if [ ${{ matrix.arch }} = x86_64 ] ; then
-              printf 'RUNS_ON=macos-13\n' >> "$GITHUB_OUTPUT"
-          else
-              printf 'RUNS_ON=macos-14\n' >> "$GITHUB_OUTPUT"
-          fi
-
-    outputs:
-      runs-on-x86_64: ${{ matrix.arch == 'x86_64' && steps.prepare.outputs.RUNS_ON || '' }}
-      runs-on-arm64: ${{ matrix.arch == 'arm64' && steps.prepare.outputs.RUNS_ON || '' }}
 
   build-x86_64:
-    needs: prepare
     runs-on: macos-13
 
     steps:
@@ -109,7 +89,6 @@ EOF
           path: imagemagick-macos-x86_64.tar.gz
 
   build-arm64:
-    needs: prepare
     runs-on: macos-14
 
     steps:
