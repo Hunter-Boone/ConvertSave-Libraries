@@ -78,7 +78,9 @@ jobs:
           "$MAGICK_PATH" -list format | grep -iE "dng|cr2|cr3|nef|arw|orf|raf|rw2|sr2" || echo "No RAW formats found"
 
       - name: Package ImageMagick binary
-        run: ./xcpkg bundle MacOSX-13.0-x86_64/imagemagick -o imagemagick-with-libraw-macos-x86_64.tar.xz
+        run: |
+          ./xcpkg bundle MacOSX-13.0-x86_64/imagemagick . imagemagick-with-libraw-macos-x86_64 .tar.xz
+          ls -lh *.tar.xz
 
       - name: Upload ImageMagick artifact
         uses: actions/upload-artifact@v4
@@ -161,7 +163,9 @@ jobs:
           "$MAGICK_PATH" -list format | grep -iE "dng|cr2|cr3|nef|arw|orf|raf|rw2|sr2" || echo "No RAW formats found"
 
       - name: Package ImageMagick binary
-        run: ./xcpkg bundle MacOSX-14.0-arm64/imagemagick -o imagemagick-with-libraw-macos-arm64.tar.xz
+        run: |
+          ./xcpkg bundle MacOSX-14.0-arm64/imagemagick . imagemagick-with-libraw-macos-arm64 .tar.xz
+          ls -lh *.tar.xz
 
       - name: Upload ImageMagick artifact
         uses: actions/upload-artifact@v4
