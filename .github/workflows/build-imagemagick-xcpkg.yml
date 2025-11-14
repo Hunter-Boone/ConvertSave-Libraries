@@ -1,0 +1,113 @@
+name: Build ImageMagick with xcpkg
+
+on:
+  workflow_dispatch:
+    inputs:
+      imagemagick-version:
+        description: "ImageMagick version to build (e.g., 7.1.1-47)"
+        required: true
+        default: "7.1.1-47"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-14' }}
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xcpkg
+        run: |
+          echo "Installing xcpkg..."
+          curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
+          chmod +x xcpkg
+          sudo mv xcpkg /usr/local/bin/
+          
+          xcpkg setup
+          xcpkg --version
+
+      - name: Build ImageMagick with xcpkg
+        run: |
+          # Determine platform target
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            TARGET="MacOSX-14.0-arm64"
+          else
+            TARGET="MacOSX-13.0-x86_64"
+          fi
+          
+          echo "Building for target: $TARGET"
+          
+          # Install ImageMagick using our xcpkg formula
+          xcpkg install $TARGET/imagemagick
+          
+      - name: Package ImageMagick
+        run: |
+          # Determine platform target
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            TARGET="MacOSX-14.0-arm64"
+          else
+            TARGET="MacOSX-13.0-x86_64"
+          fi
+          
+          # Pack the build using xcpkg (this handles relocation properly)
+          xcpkg pack $TARGET/imagemagick -t tar.gz -o .
+          
+          # Rename to our naming convention
+          mv imagemagick-*.tar.gz imagemagick-macos-${{ matrix.arch }}.tar.gz || \
+          mv *imagemagick*.tar.gz imagemagick-macos-${{ matrix.arch }}.tar.gz
+          
+          echo "✓ ImageMagick packaged successfully"
+          ls -lh imagemagick-macos-${{ matrix.arch }}.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagemagick-macos-${{ matrix.arch }}
+          path: imagemagick-macos-${{ matrix.arch }}.tar.gz
+          retention-days: 30
+
+  release:
+    needs: [build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -R artifacts
+
+      - name: Organize builds
+        run: |
+          cd artifacts
+          echo "=== Downloaded artifacts ==="
+          ls -R
+
+      - name: Update 'latest' release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: Latest ImageMagick Build
+          body: |
+            Latest ImageMagick ${{ github.event.inputs.imagemagick-version }} built with xcpkg
+            
+            ## Files:
+            
+            - `imagemagick-macos-x86_64.tar.gz` - **Intel Macs** (x86_64)
+            - `imagemagick-macos-arm64.tar.gz` - **Apple Silicon** (ARM64)
+            
+            Built using xcpkg package manager for proper dependency management and relocation.
+            Compatible with macOS 11+.
+          files: |
+            artifacts/**/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
