@@ -33,12 +33,21 @@ jobs:
           
           # Copy our imagemagick formula to xcpkg's formula directory
           echo "Installing imagemagick formula..."
-          FORMULA_DIR="$HOME/.xcpkg/formula"
-          mkdir -p "$FORMULA_DIR"
-          cp imagemagick.yml "$FORMULA_DIR/imagemagick.yml"
           
-          echo "✓ Formula installed"
-          ls -la "$FORMULA_DIR/imagemagick.yml"
+          # Check xcpkg directory structure
+          echo "xcpkg directory structure:"
+          ls -la "$HOME/.xcpkg/" || true
+          
+          # Try multiple possible formula locations
+          for FORMULA_DIR in "$HOME/.xcpkg/formula" "$HOME/.xcpkg/repos/official/formula" "$HOME/.xcpkg/formulas"; do
+            mkdir -p "$FORMULA_DIR"
+            cp imagemagick.yml "$FORMULA_DIR/imagemagick.yml"
+            echo "Copied to: $FORMULA_DIR/imagemagick.yml"
+          done
+          
+          # Also try current directory as fallback
+          echo "Formula file in current directory:"
+          ls -la imagemagick.yml
 
       - name: Build ImageMagick with xcpkg
         run: |
@@ -50,6 +59,15 @@ jobs:
           fi
           
           echo "Building for target: $TARGET"
+          
+          # Check if xcpkg can find imagemagick
+          echo "Checking xcpkg packages..."
+          xcpkg search imagemagick || true
+          xcpkg info imagemagick || true
+          
+          # List available formulas
+          echo "Available formulas:"
+          find "$HOME/.xcpkg" -name "*.yml" | head -20 || true
           
           # Install ImageMagick using our xcpkg formula
           xcpkg install $TARGET/imagemagick
