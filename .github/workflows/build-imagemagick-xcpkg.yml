@@ -67,15 +67,15 @@ jobs:
   build-arm64:
     needs: prepare
     runs-on: macos-14
-    
+
     steps:
       - run: export -p
-      
+
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
       - run: ./xcpkg update
-      
+
       # Set up compiler environment for xcpkg
       - name: Configure compiler environment
         run: |
@@ -87,12 +87,12 @@ jobs:
           echo "XCPKG_SDK_ROOT=$XCPKG_SDK_ROOT" >> $GITHUB_ENV
           echo "Using compiler: $XCPKG_COMPILER_C"
           echo "Using SDK: $XCPKG_SDK_ROOT"
-      
+
       # Download custom imagemagick formula with libraw support
       - run: |
           mkdir -p ~/.xcpkg/repos.d/official-core/formula
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
-      
+
       - run: ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
 
       - run: ./xcpkg pack MacOSX-14.0-arm64/imagemagick -t tar.gz -o .
