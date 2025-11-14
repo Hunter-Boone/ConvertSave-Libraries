@@ -6,11 +6,11 @@ on:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         arch: [x86_64, arm64]
-    
+
     steps:
       - id: prepare
         run: |
@@ -19,7 +19,7 @@ jobs:
           else
               printf 'RUNS_ON=macos-14\n' >> "$GITHUB_OUTPUT"
           fi
-    
+
     outputs:
       runs-on-x86_64: ${{ matrix.arch == 'x86_64' && steps.prepare.outputs.RUNS_ON || '' }}
       runs-on-arm64: ${{ matrix.arch == 'arm64' && steps.prepare.outputs.RUNS_ON || '' }}
@@ -27,26 +27,38 @@ jobs:
   build-x86_64:
     needs: prepare
     runs-on: macos-13
-    
+
     steps:
       - run: export -p
-      
+
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
       - run: ./xcpkg update
-      
+
+      # Set up compiler environment for xcpkg
+      - name: Configure compiler environment
+        run: |
+          export XCPKG_COMPILER_C="$(xcrun --find clang)"
+          export XCPKG_COMPILER_CXX="$(xcrun --find clang++)"
+          export XCPKG_SDK_ROOT="$(xcrun --show-sdk-path)"
+          echo "XCPKG_COMPILER_C=$XCPKG_COMPILER_C" >> $GITHUB_ENV
+          echo "XCPKG_COMPILER_CXX=$XCPKG_COMPILER_CXX" >> $GITHUB_ENV
+          echo "XCPKG_SDK_ROOT=$XCPKG_SDK_ROOT" >> $GITHUB_ENV
+          echo "Using compiler: $XCPKG_COMPILER_C"
+          echo "Using SDK: $XCPKG_SDK_ROOT"
+
       # Download custom imagemagick formula with libraw support
       - run: |
           mkdir -p ~/.xcpkg/repos.d/official-core/formula
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
-      
+
       - run: ./xcpkg install MacOSX-13.0-x86_64/imagemagick --profile=release
-      
+
       - run: ./xcpkg pack MacOSX-13.0-x86_64/imagemagick -t tar.gz -o .
-      
+
       - run: mv imagemagick-*.tar.gz imagemagick-macos-x86_64.tar.gz
-      
+
       - uses: actions/upload-artifact@v4
         with:
           name: imagemagick-macos-x86_64
@@ -64,17 +76,29 @@ jobs:
       - run: ./xcpkg setup
       - run: ./xcpkg update
       
+      # Set up compiler environment for xcpkg
+      - name: Configure compiler environment
+        run: |
+          export XCPKG_COMPILER_C="$(xcrun --find clang)"
+          export XCPKG_COMPILER_CXX="$(xcrun --find clang++)"
+          export XCPKG_SDK_ROOT="$(xcrun --show-sdk-path)"
+          echo "XCPKG_COMPILER_C=$XCPKG_COMPILER_C" >> $GITHUB_ENV
+          echo "XCPKG_COMPILER_CXX=$XCPKG_COMPILER_CXX" >> $GITHUB_ENV
+          echo "XCPKG_SDK_ROOT=$XCPKG_SDK_ROOT" >> $GITHUB_ENV
+          echo "Using compiler: $XCPKG_COMPILER_C"
+          echo "Using SDK: $XCPKG_SDK_ROOT"
+      
       # Download custom imagemagick formula with libraw support
       - run: |
           mkdir -p ~/.xcpkg/repos.d/official-core/formula
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
       
       - run: ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
-      
+
       - run: ./xcpkg pack MacOSX-14.0-arm64/imagemagick -t tar.gz -o .
-      
+
       - run: mv imagemagick-*.tar.gz imagemagick-macos-arm64.tar.gz
-      
+
       - uses: actions/upload-artifact@v4
         with:
           name: imagemagick-macos-arm64
@@ -83,13 +107,13 @@ jobs:
   release:
     needs: [build-x86_64, build-arm64]
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-      
+
       - name: Update 'latest' release
         uses: softprops/action-gh-release@v1
         with:
@@ -97,12 +121,12 @@ jobs:
           name: Latest ImageMagick Build
           body: |
             Latest ImageMagick built with xcpkg (like How to Convert)
-            
+
             ## Files:
-            
+
             - `imagemagick-macos-x86_64.tar.gz` - **Intel Macs** (x86_64)
             - `imagemagick-macos-arm64.tar.gz` - **Apple Silicon** (ARM64)
-            
+
             Built using xcpkg with How to Convert's imagemagick formula.
             Compatible with macOS 11+.
           files: |
