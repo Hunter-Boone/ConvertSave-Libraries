@@ -39,14 +39,18 @@ jobs:
       # Set up compiler environment for xcpkg
       - name: Configure compiler environment
         run: |
+          SDK_PATH="$(xcrun --show-sdk-path)"
           export XCPKG_COMPILER_C="$(xcrun --find clang)"
           export XCPKG_COMPILER_CXX="$(xcrun --find clang++)"
-          export XCPKG_SDK_ROOT="$(xcrun --show-sdk-path)"
+          export XCPKG_SDK_ROOT="$SDK_PATH"
+          export XCPKG_COMPILER_ARGS="-arch x86_64 -mmacosx-version-min=13.0 -isysroot $SDK_PATH"
           echo "XCPKG_COMPILER_C=$XCPKG_COMPILER_C" >> $GITHUB_ENV
           echo "XCPKG_COMPILER_CXX=$XCPKG_COMPILER_CXX" >> $GITHUB_ENV
           echo "XCPKG_SDK_ROOT=$XCPKG_SDK_ROOT" >> $GITHUB_ENV
+          echo "XCPKG_COMPILER_ARGS=$XCPKG_COMPILER_ARGS" >> $GITHUB_ENV
           echo "Using compiler: $XCPKG_COMPILER_C"
           echo "Using SDK: $XCPKG_SDK_ROOT"
+          echo "Compiler args: $XCPKG_COMPILER_ARGS"
 
       # Download custom imagemagick formula with libraw support
       - run: |
@@ -67,26 +71,30 @@ jobs:
   build-arm64:
     needs: prepare
     runs-on: macos-14
-
+    
     steps:
       - run: export -p
-
+      
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
       - run: ./xcpkg update
-
+      
       # Set up compiler environment for xcpkg
       - name: Configure compiler environment
         run: |
+          SDK_PATH="$(xcrun --show-sdk-path)"
           export XCPKG_COMPILER_C="$(xcrun --find clang)"
           export XCPKG_COMPILER_CXX="$(xcrun --find clang++)"
-          export XCPKG_SDK_ROOT="$(xcrun --show-sdk-path)"
+          export XCPKG_SDK_ROOT="$SDK_PATH"
+          export XCPKG_COMPILER_ARGS="-arch arm64 -mmacosx-version-min=14.0 -isysroot $SDK_PATH"
           echo "XCPKG_COMPILER_C=$XCPKG_COMPILER_C" >> $GITHUB_ENV
           echo "XCPKG_COMPILER_CXX=$XCPKG_COMPILER_CXX" >> $GITHUB_ENV
           echo "XCPKG_SDK_ROOT=$XCPKG_SDK_ROOT" >> $GITHUB_ENV
+          echo "XCPKG_COMPILER_ARGS=$XCPKG_COMPILER_ARGS" >> $GITHUB_ENV
           echo "Using compiler: $XCPKG_COMPILER_C"
           echo "Using SDK: $XCPKG_SDK_ROOT"
+          echo "Compiler args: $XCPKG_COMPILER_ARGS"
 
       # Download custom imagemagick formula with libraw support
       - run: |
