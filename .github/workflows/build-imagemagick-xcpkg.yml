@@ -30,6 +30,15 @@ jobs:
           
           xcpkg setup
           xcpkg --version
+          
+          # Copy our imagemagick formula to xcpkg's formula directory
+          echo "Installing imagemagick formula..."
+          FORMULA_DIR="$HOME/.xcpkg/formula"
+          mkdir -p "$FORMULA_DIR"
+          cp imagemagick.yml "$FORMULA_DIR/imagemagick.yml"
+          
+          echo "✓ Formula installed"
+          ls -la "$FORMULA_DIR/imagemagick.yml"
 
       - name: Build ImageMagick with xcpkg
         run: |
