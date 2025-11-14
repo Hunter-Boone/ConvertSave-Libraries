@@ -2,105 +2,108 @@ name: Build ImageMagick with xcpkg
 
 on:
   workflow_dispatch:
-    inputs:
-      imagemagick-version:
-        description: "ImageMagick version to build (e.g., 7.1.1-47)"
-        required: true
-        default: "7.1.1-47"
-
-permissions:
-  contents: write
 
 jobs:
-  build-macos:
-    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-14' }}
+  prepare:
+    runs-on: ubuntu-latest
+    
     strategy:
       matrix:
         arch: [x86_64, arm64]
+    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup xcpkg
+      - id: prepare
         run: |
-          curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
-          chmod a+x xcpkg
-          ./xcpkg setup
-          ./xcpkg update
-          
-      - name: Install custom imagemagick formula
-        run: |
-          # Download imagemagick formula from How to Convert's repository
-          mkdir -p ~/.xcpkg/repos.d/official-core/formula
-          curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml \
-            https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
-          
-          echo "=== Installed imagemagick formula ==="
-          cat ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
-
-      - name: Build and Pack ImageMagick
-        run: |
-          # Determine platform target (matching How to Convert's setup)
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            TARGET="MacOSX-14.0-arm64"
+          if [ ${{ matrix.arch }} = x86_64 ] ; then
+              printf 'RUNS_ON=macos-13\n' >> "$GITHUB_OUTPUT"
           else
-            TARGET="MacOSX-13.0-x86_64"
+              printf 'RUNS_ON=macos-14\n' >> "$GITHUB_OUTPUT"
           fi
-          
-          echo "Building for target: $TARGET"
-          
-          # Install ImageMagick (builds it with all dependencies)
-          ./xcpkg install $TARGET/imagemagick --profile=release
-          
-          # Pack into relocatable archive
-          ./xcpkg pack $TARGET/imagemagick -t tar.gz -o .
-          
-          # Rename to our naming convention
-          mv imagemagick-*.tar.gz imagemagick-macos-${{ matrix.arch }}.tar.gz || \
-          mv *imagemagick*.tar.gz imagemagick-macos-${{ matrix.arch }}.tar.gz
-          
-          echo "✓ ImageMagick packaged successfully"
-          ls -lh imagemagick-macos-${{ matrix.arch }}.tar.gz
+    
+    outputs:
+      runs-on-x86_64: ${{ matrix.arch == 'x86_64' && steps.prepare.outputs.RUNS_ON || '' }}
+      runs-on-arm64: ${{ matrix.arch == 'arm64' && steps.prepare.outputs.RUNS_ON || '' }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+  build-x86_64:
+    needs: prepare
+    runs-on: macos-13
+    
+    steps:
+      - run: export -p
+      
+      - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
+      - run: chmod a+x xcpkg
+      - run: ./xcpkg setup
+      - run: ./xcpkg update
+      
+      # Download custom imagemagick formula with libraw support
+      - run: |
+          mkdir -p ~/.xcpkg/repos.d/official-core/formula
+          curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
+      
+      - run: ./xcpkg install MacOSX-13.0-x86_64/imagemagick --profile=release
+      
+      - run: ./xcpkg pack MacOSX-13.0-x86_64/imagemagick -t tar.gz -o .
+      
+      - run: mv imagemagick-*.tar.gz imagemagick-macos-x86_64.tar.gz
+      
+      - uses: actions/upload-artifact@v4
         with:
-          name: imagemagick-macos-${{ matrix.arch }}
-          path: imagemagick-macos-${{ matrix.arch }}.tar.gz
-          retention-days: 30
+          name: imagemagick-macos-x86_64
+          path: imagemagick-macos-x86_64.tar.gz
+
+  build-arm64:
+    needs: prepare
+    runs-on: macos-14
+    
+    steps:
+      - run: export -p
+      
+      - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
+      - run: chmod a+x xcpkg
+      - run: ./xcpkg setup
+      - run: ./xcpkg update
+      
+      # Download custom imagemagick formula with libraw support
+      - run: |
+          mkdir -p ~/.xcpkg/repos.d/official-core/formula
+          curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
+      
+      - run: ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
+      
+      - run: ./xcpkg pack MacOSX-14.0-arm64/imagemagick -t tar.gz -o .
+      
+      - run: mv imagemagick-*.tar.gz imagemagick-macos-arm64.tar.gz
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imagemagick-macos-arm64
+          path: imagemagick-macos-arm64.tar.gz
 
   release:
-    needs: [build-macos]
+    needs: [build-x86_64, build-arm64]
     runs-on: ubuntu-latest
+    
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-
-      - name: Display structure
-        run: ls -R artifacts
-
-      - name: Organize builds
-        run: |
-          cd artifacts
-          echo "=== Downloaded artifacts ==="
-          ls -R
-
+      
       - name: Update 'latest' release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
           name: Latest ImageMagick Build
           body: |
-            Latest ImageMagick ${{ github.event.inputs.imagemagick-version }} built with xcpkg
+            Latest ImageMagick built with xcpkg (like How to Convert)
             
             ## Files:
             
             - `imagemagick-macos-x86_64.tar.gz` - **Intel Macs** (x86_64)
             - `imagemagick-macos-arm64.tar.gz` - **Apple Silicon** (ARM64)
             
-            Built using xcpkg package manager for proper dependency management and relocation.
+            Built using xcpkg with How to Convert's imagemagick formula.
             Compatible with macOS 11+.
           files: |
             artifacts/**/*.tar.gz
@@ -108,4 +111,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
