@@ -27,10 +27,18 @@ jobs:
   build-x86_64:
     needs: prepare
     runs-on: macos-13
-
+    
+    env:
+      XCPKG_COMPILER_C: /usr/bin/clang
+      XCPKG_COMPILER_CXX: /usr/bin/clang++
+      XCPKG_COMPILER_ARGS: -arch x86_64 -mmacosx-version-min=13.0
+      XCPKG_NATIVE_COMPILER_C: /usr/bin/clang
+      XCPKG_NATIVE_COMPILER_CXX: /usr/bin/clang++
+      XCPKG_NATIVE_COMPILER_ARGS: -arch x86_64 -mmacosx-version-min=13.0
+    
     steps:
       - run: export -p
-
+      
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
@@ -42,19 +50,7 @@ jobs:
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
 
       - name: Build ImageMagick with xcpkg
-        run: |
-          SDK_PATH="$(xcrun --show-sdk-path)"
-          CLANG_PATH="$(xcrun --find clang)"
-          CLANGXX_PATH="$(xcrun --find clang++)"
-          env \
-            XCPKG_COMPILER_C="$CLANG_PATH" \
-            XCPKG_COMPILER_CXX="$CLANGXX_PATH" \
-            XCPKG_SDK_ROOT="$SDK_PATH" \
-            XCPKG_COMPILER_ARGS="-arch x86_64 -mmacosx-version-min=13.0 -isysroot $SDK_PATH" \
-            XCPKG_NATIVE_COMPILER_C="$CLANG_PATH" \
-            XCPKG_NATIVE_COMPILER_CXX="$CLANGXX_PATH" \
-            XCPKG_NATIVE_COMPILER_ARGS="-arch x86_64 -mmacosx-version-min=13.0 -isysroot $SDK_PATH" \
-            ./xcpkg install MacOSX-13.0-x86_64/imagemagick --profile=release
+        run: ./xcpkg install MacOSX-13.0-x86_64/imagemagick --profile=release
 
       - run: ./xcpkg pack MacOSX-13.0-x86_64/imagemagick -t tar.gz -o .
 
@@ -68,10 +64,18 @@ jobs:
   build-arm64:
     needs: prepare
     runs-on: macos-14
-
+    
+    env:
+      XCPKG_COMPILER_C: /usr/bin/clang
+      XCPKG_COMPILER_CXX: /usr/bin/clang++
+      XCPKG_COMPILER_ARGS: -arch arm64 -mmacosx-version-min=14.0
+      XCPKG_NATIVE_COMPILER_C: /usr/bin/clang
+      XCPKG_NATIVE_COMPILER_CXX: /usr/bin/clang++
+      XCPKG_NATIVE_COMPILER_ARGS: -arch arm64 -mmacosx-version-min=14.0
+    
     steps:
       - run: export -p
-
+      
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
@@ -83,19 +87,7 @@ jobs:
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
 
       - name: Build ImageMagick with xcpkg
-        run: |
-          SDK_PATH="$(xcrun --show-sdk-path)"
-          CLANG_PATH="$(xcrun --find clang)"
-          CLANGXX_PATH="$(xcrun --find clang++)"
-          env \
-            XCPKG_COMPILER_C="$CLANG_PATH" \
-            XCPKG_COMPILER_CXX="$CLANGXX_PATH" \
-            XCPKG_SDK_ROOT="$SDK_PATH" \
-            XCPKG_COMPILER_ARGS="-arch arm64 -mmacosx-version-min=14.0 -isysroot $SDK_PATH" \
-            XCPKG_NATIVE_COMPILER_C="$CLANG_PATH" \
-            XCPKG_NATIVE_COMPILER_CXX="$CLANGXX_PATH" \
-            XCPKG_NATIVE_COMPILER_ARGS="-arch arm64 -mmacosx-version-min=14.0 -isysroot $SDK_PATH" \
-            ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
+        run: ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
 
       - run: ./xcpkg pack MacOSX-14.0-arm64/imagemagick -t tar.gz -o .
 
