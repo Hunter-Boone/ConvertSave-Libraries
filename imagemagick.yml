@@ -2,7 +2,7 @@ summary: A software suite to create, edit, compose, or convert bitmap images
 webpage: https://imagemagick.org/
 version: 7.1.1-47
 license: Apache-2.0
-src-url: https://imagemagick.org/archive/releases/ImageMagick-7.1.1-47.tar.xz
+web-url: https://imagemagick.org/archive/releases/ImageMagick-7.1.1-47.tar.xz
 src-sha: SKIP
 
 dep-pkg: libltdl liblqr glib libheif ghostscript-dev libtesseract libcurl openssl-dev libnghttp2 libleptonica libopenjpeg libjpeg-turbo libwebp libtiff libgif libfreetype libpng libz libbz2 libbrotli libjbig2dec liblcms2 libfontconfig libxml2 libexpat libidn
