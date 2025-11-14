@@ -25,52 +25,44 @@ jobs:
           SDK_PATH="$(xcrun --show-sdk-path)"
           echo "SDK Path: $SDK_PATH"
           
-          # Replace wrapper-native-cc with direct clang invocation
-          cat > ~/.xcpkg/core/wrapper-native-cc << 'EOF'
-#!/bin/sh
-SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
-if [ -n "$SDK_PATH" ]; then
-  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"
-else
-  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 "$@"
-fi
-EOF
+          # Create wrapper-native-cc
+          echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-native-cc
+          echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-native-cc
+          echo 'if [ -n "$SDK_PATH" ]; then' >> ~/.xcpkg/core/wrapper-native-cc
+          echo '  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"' >> ~/.xcpkg/core/wrapper-native-cc
+          echo 'else' >> ~/.xcpkg/core/wrapper-native-cc
+          echo '  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 "$@"' >> ~/.xcpkg/core/wrapper-native-cc
+          echo 'fi' >> ~/.xcpkg/core/wrapper-native-cc
           chmod +x ~/.xcpkg/core/wrapper-native-cc
           
-          # Replace wrapper-native-c++ with direct clang++ invocation
-          cat > ~/.xcpkg/core/wrapper-native-c++ << 'EOF'
-#!/bin/sh
-SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
-if [ -n "$SDK_PATH" ]; then
-  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"
-else
-  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 "$@"
-fi
-EOF
+          # Create wrapper-native-c++
+          echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-native-c++
+          echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-native-c++
+          echo 'if [ -n "$SDK_PATH" ]; then' >> ~/.xcpkg/core/wrapper-native-c++
+          echo '  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"' >> ~/.xcpkg/core/wrapper-native-c++
+          echo 'else' >> ~/.xcpkg/core/wrapper-native-c++
+          echo '  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 "$@"' >> ~/.xcpkg/core/wrapper-native-c++
+          echo 'fi' >> ~/.xcpkg/core/wrapper-native-c++
           chmod +x ~/.xcpkg/core/wrapper-native-c++
           
-          # Replace wrapper-target-cc with direct clang invocation
-          cat > ~/.xcpkg/core/wrapper-target-cc << 'EOF'
-#!/bin/sh
-SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
-if [ -n "$SDK_PATH" ]; then
-  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"
-else
-  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 "$@"
-fi
-EOF
+          # Create wrapper-target-cc
+          echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-target-cc
+          echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-target-cc
+          echo 'if [ -n "$SDK_PATH" ]; then' >> ~/.xcpkg/core/wrapper-target-cc
+          echo '  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"' >> ~/.xcpkg/core/wrapper-target-cc
+          echo 'else' >> ~/.xcpkg/core/wrapper-target-cc
+          echo '  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 "$@"' >> ~/.xcpkg/core/wrapper-target-cc
+          echo 'fi' >> ~/.xcpkg/core/wrapper-target-cc
           chmod +x ~/.xcpkg/core/wrapper-target-cc
           
-          # Replace wrapper-target-c++ with direct clang++ invocation
-          cat > ~/.xcpkg/core/wrapper-target-c++ << 'EOF'
-#!/bin/sh
-SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
-if [ -n "$SDK_PATH" ]; then
-  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"
-else
-  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 "$@"
-fi
-EOF
+          # Create wrapper-target-c++
+          echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-target-c++
+          echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-target-c++
+          echo 'if [ -n "$SDK_PATH" ]; then' >> ~/.xcpkg/core/wrapper-target-c++
+          echo '  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 -isysroot "$SDK_PATH" "$@"' >> ~/.xcpkg/core/wrapper-target-c++
+          echo 'else' >> ~/.xcpkg/core/wrapper-target-c++
+          echo '  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 "$@"' >> ~/.xcpkg/core/wrapper-target-c++
+          echo 'fi' >> ~/.xcpkg/core/wrapper-target-c++
           chmod +x ~/.xcpkg/core/wrapper-target-c++
           
           echo "Wrapper scripts patched successfully"
@@ -108,52 +100,44 @@ EOF
           SDK_PATH="$(xcrun --show-sdk-path)"
           echo "SDK Path: $SDK_PATH"
           
-          # Replace wrapper-native-cc with direct clang invocation
-          cat > ~/.xcpkg/core/wrapper-native-cc << 'EOF'
-#!/bin/sh
-SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
-if [ -n "$SDK_PATH" ]; then
-  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"
-else
-  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 "$@"
-fi
-EOF
+          # Create wrapper-native-cc
+          echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-native-cc
+          echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-native-cc
+          echo 'if [ -n "$SDK_PATH" ]; then' >> ~/.xcpkg/core/wrapper-native-cc
+          echo '  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"' >> ~/.xcpkg/core/wrapper-native-cc
+          echo 'else' >> ~/.xcpkg/core/wrapper-native-cc
+          echo '  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 "$@"' >> ~/.xcpkg/core/wrapper-native-cc
+          echo 'fi' >> ~/.xcpkg/core/wrapper-native-cc
           chmod +x ~/.xcpkg/core/wrapper-native-cc
           
-          # Replace wrapper-native-c++ with direct clang++ invocation
-          cat > ~/.xcpkg/core/wrapper-native-c++ << 'EOF'
-#!/bin/sh
-SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
-if [ -n "$SDK_PATH" ]; then
-  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"
-else
-  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 "$@"
-fi
-EOF
+          # Create wrapper-native-c++
+          echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-native-c++
+          echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-native-c++
+          echo 'if [ -n "$SDK_PATH" ]; then' >> ~/.xcpkg/core/wrapper-native-c++
+          echo '  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"' >> ~/.xcpkg/core/wrapper-native-c++
+          echo 'else' >> ~/.xcpkg/core/wrapper-native-c++
+          echo '  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 "$@"' >> ~/.xcpkg/core/wrapper-native-c++
+          echo 'fi' >> ~/.xcpkg/core/wrapper-native-c++
           chmod +x ~/.xcpkg/core/wrapper-native-c++
           
-          # Replace wrapper-target-cc with direct clang invocation
-          cat > ~/.xcpkg/core/wrapper-target-cc << 'EOF'
-#!/bin/sh
-SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
-if [ -n "$SDK_PATH" ]; then
-  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"
-else
-  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 "$@"
-fi
-EOF
+          # Create wrapper-target-cc
+          echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-target-cc
+          echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-target-cc
+          echo 'if [ -n "$SDK_PATH" ]; then' >> ~/.xcpkg/core/wrapper-target-cc
+          echo '  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"' >> ~/.xcpkg/core/wrapper-target-cc
+          echo 'else' >> ~/.xcpkg/core/wrapper-target-cc
+          echo '  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 "$@"' >> ~/.xcpkg/core/wrapper-target-cc
+          echo 'fi' >> ~/.xcpkg/core/wrapper-target-cc
           chmod +x ~/.xcpkg/core/wrapper-target-cc
           
-          # Replace wrapper-target-c++ with direct clang++ invocation
-          cat > ~/.xcpkg/core/wrapper-target-c++ << 'EOF'
-#!/bin/sh
-SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '')"
-if [ -n "$SDK_PATH" ]; then
-  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"
-else
-  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 "$@"
-fi
-EOF
+          # Create wrapper-target-c++
+          echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-target-c++
+          echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-target-c++
+          echo 'if [ -n "$SDK_PATH" ]; then' >> ~/.xcpkg/core/wrapper-target-c++
+          echo '  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 -isysroot "$SDK_PATH" "$@"' >> ~/.xcpkg/core/wrapper-target-c++
+          echo 'else' >> ~/.xcpkg/core/wrapper-target-c++
+          echo '  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 "$@"' >> ~/.xcpkg/core/wrapper-target-c++
+          echo 'fi' >> ~/.xcpkg/core/wrapper-target-c++
           chmod +x ~/.xcpkg/core/wrapper-target-c++
           
           echo "Wrapper scripts patched successfully"
