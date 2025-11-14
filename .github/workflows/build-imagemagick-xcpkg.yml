@@ -27,10 +27,10 @@ jobs:
   build-x86_64:
     needs: prepare
     runs-on: macos-13
-    
+
     steps:
       - run: export -p
-      
+
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
@@ -45,7 +45,7 @@ jobs:
         run: |
           SDK_PATH="$(xcrun --show-sdk-path)"
           echo "SDK Path: $SDK_PATH"
-          
+
           # Write environment to a file that will be sourced by all shell commands
           cat >> ~/.bashrc << EOF
           export XCPKG_COMPILER_C="/usr/bin/clang"
@@ -56,9 +56,9 @@ jobs:
           export XCPKG_NATIVE_COMPILER_CXX="/usr/bin/clang++"
           export XCPKG_NATIVE_COMPILER_ARGS="-arch x86_64 -mmacosx-version-min=13.0 -isysroot $SDK_PATH"
           EOF
-          
+
           source ~/.bashrc
-          
+
           echo "Verifying environment variables:"
           echo "XCPKG_COMPILER_C=$XCPKG_COMPILER_C"
           echo "XCPKG_COMPILER_ARGS=$XCPKG_COMPILER_ARGS"
