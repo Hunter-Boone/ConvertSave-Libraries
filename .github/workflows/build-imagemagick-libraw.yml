@@ -79,8 +79,10 @@ jobs:
 
       - name: Package ImageMagick binary
         run: |
-          ./xcpkg bundle MacOSX-13.0-x86_64/imagemagick . imagemagick-with-libraw-macos-x86_64 .tar.xz
+          ./xcpkg bundle MacOSX-13.0-x86_64/imagemagick .tar.xz
           ls -lh *.tar.xz
+          # Rename to match expected artifact name
+          mv imagemagick-*.tar.xz imagemagick-with-libraw-macos-x86_64.tar.xz || true
 
       - name: Upload ImageMagick artifact
         uses: actions/upload-artifact@v4
@@ -164,8 +166,10 @@ jobs:
 
       - name: Package ImageMagick binary
         run: |
-          ./xcpkg bundle MacOSX-14.0-arm64/imagemagick . imagemagick-with-libraw-macos-arm64 .tar.xz
+          ./xcpkg bundle MacOSX-14.0-arm64/imagemagick .tar.xz
           ls -lh *.tar.xz
+          # Rename to match expected artifact name
+          mv imagemagick-*.tar.xz imagemagick-with-libraw-macos-arm64.tar.xz || true
 
       - name: Upload ImageMagick artifact
         uses: actions/upload-artifact@v4
