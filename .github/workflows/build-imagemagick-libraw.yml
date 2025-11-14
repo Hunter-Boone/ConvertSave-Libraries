@@ -1,0 +1,205 @@
+name: Build ImageMagick with libraw
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-x86_64:
+    runs-on: macos-13
+
+    steps:
+      - name: Download xcpkg
+        run: |
+          curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
+          chmod +x xcpkg
+
+      - name: Patch xcpkg for missing compiler environment variables
+        run: |
+          # xcpkg has a bug where it doesn't set XCPKG_COMPILER_* variables needed by wrapper scripts
+          # Add XCPKG_COMPILER_ARGS right after XCPKG_TARGET_FLAGS
+          sed -i.bak1 '/export XCPKG_TARGET_FLAGS=.*-Qunused-arguments"$/a\
+              export XCPKG_COMPILER_ARGS="$XCPKG_TARGET_FLAGS"
+          ' xcpkg
+
+          # Add XCPKG_COMPILER_* variables after XCPKG_OBJC
+          sed -i.bak2 '/export XCPKG_OBJC="\$XCODE_CC"$/a\
+              export XCPKG_COMPILER_C="$XCODE_CC"\
+              export XCPKG_COMPILER_CXX="$XCODE_CXX"\
+              export XCPKG_COMPILER_OBJC="$XCODE_CC"
+          ' xcpkg
+
+          # Add XCPKG_COMPILER_ARGS_FOR_BUILD after XCPKG_NATIVE_FLAGS
+          sed -i.bak3 '/export XCPKG_NATIVE_FLAGS=.*-Qunused-arguments"$/a\
+              export XCPKG_COMPILER_ARGS_FOR_BUILD="$XCPKG_NATIVE_FLAGS"
+          ' xcpkg
+
+          # Add compiler variables to native package installation function
+          sed -i.bak4 '/export LDFLAGS="-L\$PACKAGE_WORKING_DIR\/lib -Wl,-rpath,\$PACKAGE_INSTALL_DIR\/lib \$LDFLAGS"$/a\
+          \
+              # Set compiler variables for wrappers\
+              export XCPKG_COMPILER_C="$XCODE_CC"\
+              export XCPKG_COMPILER_CXX="$XCODE_CXX"\
+              export XCPKG_COMPILER_OBJC="$XCODE_CC"\
+              export XCPKG_COMPILER_ARGS_FOR_BUILD="$XCPKG_NATIVE_FLAGS"
+          ' xcpkg
+
+          rm -f xcpkg.bak*
+          echo "✅ xcpkg patched successfully"
+
+      - name: Setup xcpkg
+        run: ./xcpkg setup
+
+      - name: Update xcpkg formulas
+        run: ./xcpkg update
+
+      - name: Replace ImageMagick formula with custom version (includes libraw)
+        run: |
+          curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml \
+            https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
+          echo "Custom ImageMagick formula with libraw installed"
+
+      - name: Build ImageMagick with libraw support
+        run: ./xcpkg install MacOSX-13.0-x86_64/imagemagick --profile=release
+
+      - name: Verify libraw support
+        run: |
+          MAGICK_PATH=$(find ~/.xcpkg/installed/MacOSX-13.0-x86_64 -name "magick" -type f | head -1)
+          echo "ImageMagick binary: $MAGICK_PATH"
+
+          echo "Version:"
+          "$MAGICK_PATH" -version | head -5
+
+          echo ""
+          echo "Checking for libraw support:"
+          "$MAGICK_PATH" -version | grep -i raw || echo "No 'raw' in version output"
+
+          echo ""
+          echo "Supported formats (RAW):"
+          "$MAGICK_PATH" -list format | grep -iE "dng|cr2|cr3|nef|arw|orf|raf|rw2|sr2" || echo "No RAW formats found"
+
+      - name: Package ImageMagick binary
+        run: ./xcpkg bundle MacOSX-13.0-x86_64/imagemagick -o imagemagick-with-libraw-macos-x86_64.tar.xz
+
+      - name: Upload ImageMagick artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagemagick-with-libraw-macos-x86_64
+          path: imagemagick-with-libraw-macos-x86_64.tar.xz
+          retention-days: 30
+
+  build-arm64:
+    runs-on: macos-14
+
+    steps:
+      - name: Download xcpkg
+        run: |
+          curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
+          chmod +x xcpkg
+
+      - name: Patch xcpkg for missing compiler environment variables
+        run: |
+          # xcpkg has a bug where it doesn't set XCPKG_COMPILER_* variables needed by wrapper scripts
+          # Add XCPKG_COMPILER_ARGS right after XCPKG_TARGET_FLAGS
+          sed -i.bak1 '/export XCPKG_TARGET_FLAGS=.*-Qunused-arguments"$/a\
+              export XCPKG_COMPILER_ARGS="$XCPKG_TARGET_FLAGS"
+          ' xcpkg
+
+          # Add XCPKG_COMPILER_* variables after XCPKG_OBJC
+          sed -i.bak2 '/export XCPKG_OBJC="\$XCODE_CC"$/a\
+              export XCPKG_COMPILER_C="$XCODE_CC"\
+              export XCPKG_COMPILER_CXX="$XCODE_CXX"\
+              export XCPKG_COMPILER_OBJC="$XCODE_CC"
+          ' xcpkg
+
+          # Add XCPKG_COMPILER_ARGS_FOR_BUILD after XCPKG_NATIVE_FLAGS
+          sed -i.bak3 '/export XCPKG_NATIVE_FLAGS=.*-Qunused-arguments"$/a\
+              export XCPKG_COMPILER_ARGS_FOR_BUILD="$XCPKG_NATIVE_FLAGS"
+          ' xcpkg
+
+          # Add compiler variables to native package installation function
+          sed -i.bak4 '/export LDFLAGS="-L\$PACKAGE_WORKING_DIR\/lib -Wl,-rpath,\$PACKAGE_INSTALL_DIR\/lib \$LDFLAGS"$/a\
+          \
+              # Set compiler variables for wrappers\
+              export XCPKG_COMPILER_C="$XCODE_CC"\
+              export XCPKG_COMPILER_CXX="$XCODE_CXX"\
+              export XCPKG_COMPILER_OBJC="$XCODE_CC"\
+              export XCPKG_COMPILER_ARGS_FOR_BUILD="$XCPKG_NATIVE_FLAGS"
+          ' xcpkg
+
+          rm -f xcpkg.bak*
+          echo "✅ xcpkg patched successfully"
+
+      - name: Setup xcpkg
+        run: ./xcpkg setup
+
+      - name: Update xcpkg formulas
+        run: ./xcpkg update
+
+      - name: Replace ImageMagick formula with custom version (includes libraw)
+        run: |
+          curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml \
+            https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
+          echo "Custom ImageMagick formula with libraw installed"
+
+      - name: Build ImageMagick with libraw support
+        run: ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
+
+      - name: Verify libraw support
+        run: |
+          MAGICK_PATH=$(find ~/.xcpkg/installed/MacOSX-14.0-arm64 -name "magick" -type f | head -1)
+          echo "ImageMagick binary: $MAGICK_PATH"
+
+          echo "Version:"
+          "$MAGICK_PATH" -version | head -5
+
+          echo ""
+          echo "Checking for libraw support:"
+          "$MAGICK_PATH" -version | grep -i raw || echo "No 'raw' in version output"
+
+          echo ""
+          echo "Supported formats (RAW):"
+          "$MAGICK_PATH" -list format | grep -iE "dng|cr2|cr3|nef|arw|orf|raf|rw2|sr2" || echo "No RAW formats found"
+
+      - name: Package ImageMagick binary
+        run: ./xcpkg bundle MacOSX-14.0-arm64/imagemagick -o imagemagick-with-libraw-macos-arm64.tar.xz
+
+      - name: Upload ImageMagick artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagemagick-with-libraw-macos-arm64
+          path: imagemagick-with-libraw-macos-arm64.tar.xz
+          retention-days: 30
+
+  release:
+    needs: [build-x86_64, build-arm64]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Update 'latest' release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: latest
+          name: Latest ImageMagick Build
+          body: |
+            Latest ImageMagick built with xcpkg (using How to Convert's patching approach)
+            
+            ## Files:
+            
+            - `imagemagick-with-libraw-macos-x86_64.tar.xz` - **Intel Macs** (x86_64)
+            - `imagemagick-with-libraw-macos-arm64.tar.xz` - **Apple Silicon** (ARM64)
+            
+            Built using xcpkg with How to Convert's imagemagick formula and xcpkg patches.
+            Includes full libraw support for RAW image formats.
+            Compatible with macOS 11+.
+          files: |
+            artifacts/**/*.tar.xz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
