@@ -71,15 +71,15 @@ jobs:
   build-arm64:
     needs: prepare
     runs-on: macos-14
-    
+
     steps:
       - run: export -p
-      
+
       - run: curl -LO https://raw.githubusercontent.com/leleliu008/xcpkg/master/xcpkg
       - run: chmod a+x xcpkg
       - run: ./xcpkg setup
       - run: ./xcpkg update
-      
+
       # Set up compiler environment for xcpkg
       - name: Configure compiler environment
         run: |
