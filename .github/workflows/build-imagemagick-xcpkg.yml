@@ -39,19 +39,11 @@ jobs:
           echo "=== xcpkg commands ==="
           xcpkg 2>&1 | head -50 || true
           
-          # Check if imagemagick already exists in official repo
-          echo "=== Checking official repo ==="
-          ls -la "$HOME/.xcpkg/repos/official/formula/" | grep -i image || echo "No image formulas in official repo"
-          
-          # Show what an existing formula looks like
-          echo "=== Example formula (libpng) ==="
-          cat "$HOME/.xcpkg/repos/official/formula/libpng.yml" 2>/dev/null | head -30 || echo "libpng.yml not found"
-          
-          # Copy our imagemagick formula, replacing any existing one
-          echo "=== Installing our imagemagick formula ==="
-          cp imagemagick.yml "$HOME/.xcpkg/repos/official/formula/imagemagick.yml"
-          echo "Installed to: $HOME/.xcpkg/repos/official/formula/imagemagick.yml"
-          cat "$HOME/.xcpkg/repos/official/formula/imagemagick.yml"
+          # Show our formula
+          echo "=== Our imagemagick formula ==="
+          cat imagemagick.yml
+          echo ""
+          echo "We'll use -I . to tell xcpkg to search for formulas in current directory"
 
       - name: Build ImageMagick with xcpkg
         run: |
@@ -64,24 +56,9 @@ jobs:
           
           echo "Building for target: $TARGET"
           
-          # Check if xcpkg can find imagemagick
-          echo "Checking xcpkg packages..."
-          xcpkg search imagemagick || true
-          
-          # List available formulas
-          echo "Available formulas:"
-          find "$HOME/.xcpkg" -name "imagemagick.yml"
-          
-          # Try to update formula repo
-          echo "Updating formula repositories..."
-          xcpkg formula-repo-sync || true
-          
-          # Install ImageMagick directly from our formula file
-          echo "Installing ImageMagick from formula file..."
-          xcpkg install $TARGET/imagemagick --from-file=imagemagick.yml || \
-          xcpkg install $TARGET/imagemagick --formula=imagemagick.yml || \
-          xcpkg install $TARGET/imagemagick -f imagemagick.yml || \
-          xcpkg install imagemagick
+          # Install ImageMagick using -I to specify current directory as formula search path
+          echo "Installing ImageMagick with custom formula..."
+          xcpkg install $TARGET/imagemagick -I .
           
       - name: Package ImageMagick
         run: |
@@ -92,8 +69,8 @@ jobs:
             TARGET="MacOSX-13.0-x86_64"
           fi
           
-          # Pack the build using xcpkg (this handles relocation properly)
-          xcpkg pack $TARGET/imagemagick -t tar.gz -o .
+          # Bundle the build using xcpkg (this creates a relocatable archive)
+          xcpkg bundle $TARGET/imagemagick .tar.gz
           
           # Rename to our naming convention
           mv imagemagick-*.tar.gz imagemagick-macos-${{ matrix.arch }}.tar.gz || \
