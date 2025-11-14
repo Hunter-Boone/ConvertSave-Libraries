@@ -31,23 +31,27 @@ jobs:
           xcpkg setup
           xcpkg --version
           
-          # Copy our imagemagick formula to xcpkg's formula directory
-          echo "Installing imagemagick formula..."
+          # Show xcpkg help to understand commands
+          echo "=== xcpkg help ==="
+          xcpkg --help || xcpkg help || true
           
-          # Check xcpkg directory structure
-          echo "xcpkg directory structure:"
-          ls -la "$HOME/.xcpkg/" || true
+          # Show available commands
+          echo "=== xcpkg commands ==="
+          xcpkg 2>&1 | head -50 || true
           
-          # Try multiple possible formula locations
-          for FORMULA_DIR in "$HOME/.xcpkg/formula" "$HOME/.xcpkg/repos/official/formula" "$HOME/.xcpkg/formulas"; do
-            mkdir -p "$FORMULA_DIR"
-            cp imagemagick.yml "$FORMULA_DIR/imagemagick.yml"
-            echo "Copied to: $FORMULA_DIR/imagemagick.yml"
-          done
+          # Check if imagemagick already exists in official repo
+          echo "=== Checking official repo ==="
+          ls -la "$HOME/.xcpkg/repos/official/formula/" | grep -i image || echo "No image formulas in official repo"
           
-          # Also try current directory as fallback
-          echo "Formula file in current directory:"
-          ls -la imagemagick.yml
+          # Show what an existing formula looks like
+          echo "=== Example formula (libpng) ==="
+          cat "$HOME/.xcpkg/repos/official/formula/libpng.yml" 2>/dev/null | head -30 || echo "libpng.yml not found"
+          
+          # Copy our imagemagick formula, replacing any existing one
+          echo "=== Installing our imagemagick formula ==="
+          cp imagemagick.yml "$HOME/.xcpkg/repos/official/formula/imagemagick.yml"
+          echo "Installed to: $HOME/.xcpkg/repos/official/formula/imagemagick.yml"
+          cat "$HOME/.xcpkg/repos/official/formula/imagemagick.yml"
 
       - name: Build ImageMagick with xcpkg
         run: |
@@ -63,14 +67,21 @@ jobs:
           # Check if xcpkg can find imagemagick
           echo "Checking xcpkg packages..."
           xcpkg search imagemagick || true
-          xcpkg info imagemagick || true
           
           # List available formulas
           echo "Available formulas:"
-          find "$HOME/.xcpkg" -name "*.yml" | head -20 || true
+          find "$HOME/.xcpkg" -name "imagemagick.yml"
           
-          # Install ImageMagick using our xcpkg formula
-          xcpkg install $TARGET/imagemagick
+          # Try to update formula repo
+          echo "Updating formula repositories..."
+          xcpkg formula-repo-sync || true
+          
+          # Install ImageMagick directly from our formula file
+          echo "Installing ImageMagick from formula file..."
+          xcpkg install $TARGET/imagemagick --from-file=imagemagick.yml || \
+          xcpkg install $TARGET/imagemagick --formula=imagemagick.yml || \
+          xcpkg install $TARGET/imagemagick -f imagemagick.yml || \
+          xcpkg install imagemagick
           
       - name: Package ImageMagick
         run: |
