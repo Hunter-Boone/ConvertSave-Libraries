@@ -24,7 +24,7 @@ jobs:
         run: |
           SDK_PATH="$(xcrun --show-sdk-path)"
           echo "SDK Path: $SDK_PATH"
-          
+
           # Create wrapper-native-cc
           echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-native-cc
           echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-native-cc
@@ -34,7 +34,7 @@ jobs:
           echo '  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 "$@"' >> ~/.xcpkg/core/wrapper-native-cc
           echo 'fi' >> ~/.xcpkg/core/wrapper-native-cc
           chmod +x ~/.xcpkg/core/wrapper-native-cc
-          
+
           # Create wrapper-native-c++
           echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-native-c++
           echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-native-c++
@@ -44,7 +44,7 @@ jobs:
           echo '  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 "$@"' >> ~/.xcpkg/core/wrapper-native-c++
           echo 'fi' >> ~/.xcpkg/core/wrapper-native-c++
           chmod +x ~/.xcpkg/core/wrapper-native-c++
-          
+
           # Create wrapper-target-cc
           echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-target-cc
           echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-target-cc
@@ -54,7 +54,7 @@ jobs:
           echo '  exec /usr/bin/clang -arch x86_64 -mmacosx-version-min=13.0 "$@"' >> ~/.xcpkg/core/wrapper-target-cc
           echo 'fi' >> ~/.xcpkg/core/wrapper-target-cc
           chmod +x ~/.xcpkg/core/wrapper-target-cc
-          
+
           # Create wrapper-target-c++
           echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-target-c++
           echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-target-c++
@@ -64,7 +64,7 @@ jobs:
           echo '  exec /usr/bin/clang++ -arch x86_64 -mmacosx-version-min=13.0 "$@"' >> ~/.xcpkg/core/wrapper-target-c++
           echo 'fi' >> ~/.xcpkg/core/wrapper-target-c++
           chmod +x ~/.xcpkg/core/wrapper-target-c++
-          
+
           echo "Wrapper scripts patched successfully"
 
       - name: Build ImageMagick with xcpkg
@@ -99,7 +99,7 @@ jobs:
         run: |
           SDK_PATH="$(xcrun --show-sdk-path)"
           echo "SDK Path: $SDK_PATH"
-          
+
           # Create wrapper-native-cc
           echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-native-cc
           echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-native-cc
@@ -109,7 +109,7 @@ jobs:
           echo '  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 "$@"' >> ~/.xcpkg/core/wrapper-native-cc
           echo 'fi' >> ~/.xcpkg/core/wrapper-native-cc
           chmod +x ~/.xcpkg/core/wrapper-native-cc
-          
+
           # Create wrapper-native-c++
           echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-native-c++
           echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-native-c++
@@ -119,7 +119,7 @@ jobs:
           echo '  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 "$@"' >> ~/.xcpkg/core/wrapper-native-c++
           echo 'fi' >> ~/.xcpkg/core/wrapper-native-c++
           chmod +x ~/.xcpkg/core/wrapper-native-c++
-          
+
           # Create wrapper-target-cc
           echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-target-cc
           echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-target-cc
@@ -129,7 +129,7 @@ jobs:
           echo '  exec /usr/bin/clang -arch arm64 -mmacosx-version-min=14.0 "$@"' >> ~/.xcpkg/core/wrapper-target-cc
           echo 'fi' >> ~/.xcpkg/core/wrapper-target-cc
           chmod +x ~/.xcpkg/core/wrapper-target-cc
-          
+
           # Create wrapper-target-c++
           echo '#!/bin/sh' > ~/.xcpkg/core/wrapper-target-c++
           echo 'SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo '"''"')"' >> ~/.xcpkg/core/wrapper-target-c++
@@ -139,7 +139,7 @@ jobs:
           echo '  exec /usr/bin/clang++ -arch arm64 -mmacosx-version-min=14.0 "$@"' >> ~/.xcpkg/core/wrapper-target-c++
           echo 'fi' >> ~/.xcpkg/core/wrapper-target-c++
           chmod +x ~/.xcpkg/core/wrapper-target-c++
-          
+
           echo "Wrapper scripts patched successfully"
 
       - name: Build ImageMagick with xcpkg
