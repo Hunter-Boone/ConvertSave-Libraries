@@ -2,13 +2,18 @@ name: Build ImageMagick with libraw
 
 on:
   workflow_dispatch:
+    inputs:
+      imagemagick-version:
+        description: 'ImageMagick version to build (e.g., 7.1.1-47, 7.1.1-48)'
+        required: true
+        default: '7.1.1-47'
 
 permissions:
   contents: write
 
 jobs:
   build-x86_64:
-    runs-on: macos-13
+    runs-on: macos-15-intel
 
     steps:
       - name: Download xcpkg
@@ -59,14 +64,32 @@ jobs:
         run: |
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml \
             https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
+          
+          # Update version if different from default
+          if [ "${{ github.event.inputs.imagemagick-version }}" != "7.1.1-47" ]; then
+            VERSION="${{ github.event.inputs.imagemagick-version }}"
+            echo "Updating ImageMagick formula to version $VERSION"
+            
+            # Update the version in the formula
+            sed -i.bak "s/7\.1\.1-47/$VERSION/g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            
+            # Update the source URL
+            sed -i.bak2 "s|ImageMagick-7\.1\.1-47|ImageMagick-$VERSION|g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            
+            rm -f ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml.bak*
+            
+            echo "Updated formula:"
+            grep -A 5 "src-url:" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+          fi
+          
           echo "Custom ImageMagick formula with libraw installed"
 
       - name: Build ImageMagick with libraw support
-        run: ./xcpkg install MacOSX-13.0-x86_64/imagemagick --profile=release
+        run: ./xcpkg install MacOSX-15.0-x86_64/imagemagick --profile=release
 
       - name: Verify libraw support
         run: |
-          MAGICK_PATH=$(find ~/.xcpkg/installed/MacOSX-13.0-x86_64 -name "magick" -type f | head -1)
+          MAGICK_PATH=$(find ~/.xcpkg/installed/MacOSX-15.0-x86_64 -name "magick" -type f | head -1)
           echo "ImageMagick binary: $MAGICK_PATH"
 
           echo "Version:"
@@ -82,7 +105,7 @@ jobs:
 
       - name: Package ImageMagick binary
         run: |
-          ./xcpkg bundle MacOSX-13.0-x86_64/imagemagick .tar.xz
+          ./xcpkg bundle MacOSX-15.0-x86_64/imagemagick .tar.xz
           ls -lh *.tar.xz
           
           # Extract, strip top-level directory, and repackage for ConvertSave
@@ -108,7 +131,7 @@ jobs:
           retention-days: 30
 
   build-arm64:
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - name: Download xcpkg
@@ -159,14 +182,32 @@ jobs:
         run: |
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml \
             https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
+          
+          # Update version if different from default
+          if [ "${{ github.event.inputs.imagemagick-version }}" != "7.1.1-47" ]; then
+            VERSION="${{ github.event.inputs.imagemagick-version }}"
+            echo "Updating ImageMagick formula to version $VERSION"
+            
+            # Update the version in the formula
+            sed -i.bak "s/7\.1\.1-47/$VERSION/g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            
+            # Update the source URL
+            sed -i.bak2 "s|ImageMagick-7\.1\.1-47|ImageMagick-$VERSION|g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            
+            rm -f ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml.bak*
+            
+            echo "Updated formula:"
+            grep -A 5 "src-url:" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+          fi
+          
           echo "Custom ImageMagick formula with libraw installed"
 
       - name: Build ImageMagick with libraw support
-        run: ./xcpkg install MacOSX-14.0-arm64/imagemagick --profile=release
+        run: ./xcpkg install MacOSX-15.0-arm64/imagemagick --profile=release
 
       - name: Verify libraw support
         run: |
-          MAGICK_PATH=$(find ~/.xcpkg/installed/MacOSX-14.0-arm64 -name "magick" -type f | head -1)
+          MAGICK_PATH=$(find ~/.xcpkg/installed/MacOSX-15.0-arm64 -name "magick" -type f | head -1)
           echo "ImageMagick binary: $MAGICK_PATH"
 
           echo "Version:"
@@ -182,7 +223,7 @@ jobs:
 
       - name: Package ImageMagick binary
         run: |
-          ./xcpkg bundle MacOSX-14.0-arm64/imagemagick .tar.xz
+          ./xcpkg bundle MacOSX-15.0-arm64/imagemagick .tar.xz
           ls -lh *.tar.xz
           
           # Extract, strip top-level directory, and repackage for ConvertSave
