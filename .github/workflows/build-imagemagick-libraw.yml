@@ -3,6 +3,9 @@ name: Build ImageMagick with libraw
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-x86_64:
     runs-on: macos-13
