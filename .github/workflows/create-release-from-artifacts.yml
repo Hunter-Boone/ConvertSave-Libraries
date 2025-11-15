@@ -46,24 +46,44 @@ jobs:
           if [ -f imagemagick-with-libraw-macos-x86_64/*.tar.xz ] || [ -f imagemagick-macos-x86_64/*.tar.xz ]; then
             echo "Processing x86_64 artifact..."
             XZFILE=$(find . -name "*x86_64*.tar.xz" | head -1)
+            
+            # Extract, strip top-level directory, and repackage
+            mkdir -p repack-x86_64
             xz -d "$XZFILE"
             TARFILE="${XZFILE%.xz}"
-            gzip "$TARFILE"
-            GZFILE="${TARFILE}.gz"
-            mv "$GZFILE" imagemagick-macos-x86_64.tar.gz
+            tar -xf "$TARFILE" --strip-components=1 -C repack-x86_64/
+            rm "$TARFILE"
+            
+            # Create new tarball without extra directory level
+            cd repack-x86_64
+            tar -czf ../imagemagick-macos-x86_64.tar.gz .
+            cd ..
+            
             echo "Created imagemagick-macos-x86_64.tar.gz"
+            echo "Contents:"
+            tar -tzf imagemagick-macos-x86_64.tar.gz | head -20
           fi
           
           # Process arm64 artifact if it exists
           if [ -f imagemagick-with-libraw-macos-arm64/*.tar.xz ] || [ -f imagemagick-macos-arm64/*.tar.xz ]; then
             echo "Processing arm64 artifact..."
             XZFILE=$(find . -name "*arm64*.tar.xz" | head -1)
+            
+            # Extract, strip top-level directory, and repackage
+            mkdir -p repack-arm64
             xz -d "$XZFILE"
             TARFILE="${XZFILE%.xz}"
-            gzip "$TARFILE"
-            GZFILE="${TARFILE}.gz"
-            mv "$GZFILE" imagemagick-macos-arm64.tar.gz
+            tar -xf "$TARFILE" --strip-components=1 -C repack-arm64/
+            rm "$TARFILE"
+            
+            # Create new tarball without extra directory level
+            cd repack-arm64
+            tar -czf ../imagemagick-macos-arm64.tar.gz .
+            cd ..
+            
             echo "Created imagemagick-macos-arm64.tar.gz"
+            echo "Contents:"
+            tar -tzf imagemagick-macos-arm64.tar.gz | head -20
           fi
           
           cd ..

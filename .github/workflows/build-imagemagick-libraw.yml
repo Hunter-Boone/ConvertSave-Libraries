@@ -84,11 +84,21 @@ jobs:
         run: |
           ./xcpkg bundle MacOSX-13.0-x86_64/imagemagick .tar.xz
           ls -lh *.tar.xz
-          # Decompress and recompress as .tar.gz with correct name for ConvertSave
+          
+          # Extract, strip top-level directory, and repackage for ConvertSave
+          mkdir -p repack
           xz -d imagemagick-*.tar.xz
-          gzip imagemagick-*.tar
-          mv imagemagick-*.tar.gz imagemagick-macos-x86_64.tar.gz
+          tar -xf imagemagick-*.tar --strip-components=1 -C repack/
+          rm imagemagick-*.tar
+          
+          # Create new tarball without extra directory level
+          cd repack
+          tar -czf ../imagemagick-macos-x86_64.tar.gz .
+          cd ..
+          
           ls -lh imagemagick-macos-x86_64.tar.gz
+          echo "Contents of archive:"
+          tar -tzf imagemagick-macos-x86_64.tar.gz | head -20
 
       - name: Upload ImageMagick artifact
         uses: actions/upload-artifact@v4
@@ -174,11 +184,21 @@ jobs:
         run: |
           ./xcpkg bundle MacOSX-14.0-arm64/imagemagick .tar.xz
           ls -lh *.tar.xz
-          # Decompress and recompress as .tar.gz with correct name for ConvertSave
+          
+          # Extract, strip top-level directory, and repackage for ConvertSave
+          mkdir -p repack
           xz -d imagemagick-*.tar.xz
-          gzip imagemagick-*.tar
-          mv imagemagick-*.tar.gz imagemagick-macos-arm64.tar.gz
+          tar -xf imagemagick-*.tar --strip-components=1 -C repack/
+          rm imagemagick-*.tar
+          
+          # Create new tarball without extra directory level
+          cd repack
+          tar -czf ../imagemagick-macos-arm64.tar.gz .
+          cd ..
+          
           ls -lh imagemagick-macos-arm64.tar.gz
+          echo "Contents of archive:"
+          tar -tzf imagemagick-macos-arm64.tar.gz | head -20
 
       - name: Upload ImageMagick artifact
         uses: actions/upload-artifact@v4
