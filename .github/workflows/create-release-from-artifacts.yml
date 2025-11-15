@@ -1,0 +1,63 @@
+name: Create Release from Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      run-id:
+        description: 'Workflow Run ID (from the URL of the completed run)'
+        required: true
+        type: string
+      tag-name:
+        description: 'Release tag name'
+        required: true
+        default: 'latest'
+      release-name:
+        description: 'Release title'
+        required: true
+        default: 'Latest ImageMagick Build'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download artifacts from specified run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.run-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: artifacts
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find artifacts -type f
+          ls -lhR artifacts/
+
+      - name: Create/Update Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.tag-name }}
+          name: ${{ inputs.release-name }}
+          body: |
+            ImageMagick built with xcpkg (using How to Convert's patching approach)
+            
+            ## Files:
+            
+            - `imagemagick-with-libraw-macos-x86_64.tar.xz` - **Intel Macs** (x86_64)
+            - `imagemagick-with-libraw-macos-arm64.tar.xz` - **Apple Silicon** (ARM64)
+            
+            Built using xcpkg with How to Convert's imagemagick formula and xcpkg patches.
+            Includes full libraw support for RAW image formats.
+            Compatible with macOS 11+.
+          files: |
+            artifacts/**/*.tar.xz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
