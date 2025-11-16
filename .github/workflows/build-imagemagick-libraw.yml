@@ -70,16 +70,27 @@ jobs:
             VERSION="${{ github.event.inputs.imagemagick-version }}"
             echo "Updating ImageMagick formula to version $VERSION"
             
-            # Update the version in the formula
-            sed -i.bak "s/7\.1\.1-47/$VERSION/g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            # Download the new version to calculate SHA256
+            NEW_URL="https://imagemagick.org/archive/releases/ImageMagick-$VERSION.tar.xz"
+            echo "Downloading $NEW_URL to calculate checksum..."
+            curl -LO "$NEW_URL"
             
-            # Update the source URL
+            # Calculate SHA256
+            NEW_SHA256=$(shasum -a 256 "ImageMagick-$VERSION.tar.xz" | awk '{print $1}')
+            echo "Calculated SHA256: $NEW_SHA256"
+            
+            # Clean up downloaded file
+            rm "ImageMagick-$VERSION.tar.xz"
+            
+            # Update the formula
+            sed -i.bak "s/7\.1\.1-47/$VERSION/g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
             sed -i.bak2 "s|ImageMagick-7\.1\.1-47|ImageMagick-$VERSION|g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            sed -i.bak3 "s/src-sha: .*/src-sha: $NEW_SHA256/" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
             
             rm -f ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml.bak*
             
             echo "Updated formula:"
-            grep -A 5 "src-url:" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            grep -E "src-url:|src-sha:" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
           fi
           
           echo "Custom ImageMagick formula with libraw installed"
@@ -188,16 +199,27 @@ jobs:
             VERSION="${{ github.event.inputs.imagemagick-version }}"
             echo "Updating ImageMagick formula to version $VERSION"
             
-            # Update the version in the formula
-            sed -i.bak "s/7\.1\.1-47/$VERSION/g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            # Download the new version to calculate SHA256
+            NEW_URL="https://imagemagick.org/archive/releases/ImageMagick-$VERSION.tar.xz"
+            echo "Downloading $NEW_URL to calculate checksum..."
+            curl -LO "$NEW_URL"
             
-            # Update the source URL
+            # Calculate SHA256
+            NEW_SHA256=$(shasum -a 256 "ImageMagick-$VERSION.tar.xz" | awk '{print $1}')
+            echo "Calculated SHA256: $NEW_SHA256"
+            
+            # Clean up downloaded file
+            rm "ImageMagick-$VERSION.tar.xz"
+            
+            # Update the formula
+            sed -i.bak "s/7\.1\.1-47/$VERSION/g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
             sed -i.bak2 "s|ImageMagick-7\.1\.1-47|ImageMagick-$VERSION|g" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            sed -i.bak3 "s/src-sha: .*/src-sha: $NEW_SHA256/" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
             
             rm -f ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml.bak*
             
             echo "Updated formula:"
-            grep -A 5 "src-url:" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
+            grep -E "src-url:|src-sha:" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
           fi
           
           echo "Custom ImageMagick formula with libraw installed"
