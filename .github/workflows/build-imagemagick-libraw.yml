@@ -51,66 +51,6 @@ jobs:
               export XCPKG_COMPILER_ARGS_FOR_BUILD="$XCPKG_NATIVE_FLAGS"
           ' xcpkg
 
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("xcpkg")
-          text = path.read_text()
-
-          setup_target = '        run ./uppm install "$item"\\n'
-          setup_replacement = '''        UPPM_ITEM_ATTEMPTS=0
-                  while :
-                  do
-                      if run ./uppm install "$item"
-                      then
-                          break
-                      fi
-
-                      UPPM_ITEM_ATTEMPTS=$(expr "$UPPM_ITEM_ATTEMPTS" + 1)
-
-                      if [ "$UPPM_ITEM_ATTEMPTS" -ge "${UPPM_INSTALL_MAX_RETRIES:-5}" ] ; then
-                          abort 1 "uppm install $item failed after $UPPM_ITEM_ATTEMPTS attempts."
-                      fi
-
-                      warn "uppm install $item failed (attempt $UPPM_ITEM_ATTEMPTS). Retrying in ${UPPM_INSTALL_RETRY_DELAY:-15} seconds..."
-                      sleep "${UPPM_INSTALL_RETRY_DELAY:-15}"
-                  done
-
-          '''
-
-          pkg_target = '        run "$UPPM" install "$UPPM_PACKAGE_NAME" $UPPM_INSTALL_ARGS\\n'
-          pkg_replacement = '''        UPPM_PACKAGE_ATTEMPTS=0
-                  while :
-                  do
-                      if run "$UPPM" install "$UPPM_PACKAGE_NAME" $UPPM_INSTALL_ARGS
-                      then
-                          break
-                      fi
-
-                      UPPM_PACKAGE_ATTEMPTS=$(expr "$UPPM_PACKAGE_ATTEMPTS" + 1)
-
-                      if [ "$UPPM_PACKAGE_ATTEMPTS" -ge "${UPPM_INSTALL_MAX_RETRIES:-5}" ] ; then
-                          abort 1 "uppm install $UPPM_PACKAGE_NAME failed after $UPPM_PACKAGE_ATTEMPTS attempts."
-                      fi
-
-                      warn "uppm install $UPPM_PACKAGE_NAME failed (attempt $UPPM_PACKAGE_ATTEMPTS). Retrying in ${UPPM_INSTALL_RETRY_DELAY:-15} seconds..."
-                      sleep "${UPPM_INSTALL_RETRY_DELAY:-15}"
-                  done
-
-          '''
-
-          if setup_target not in text:
-              raise SystemExit("Could not find uppm setup install target in xcpkg")
-
-          if pkg_target not in text:
-              raise SystemExit("Could not find uppm package install target in xcpkg")
-
-          text = text.replace(setup_target, setup_replacement, 1)
-          text = text.replace(pkg_target, pkg_replacement, 1)
-
-          path.write_text(text)
-          print("✅ Added retry logic to uppm installs inside xcpkg.")
-          PY
 
           rm -f xcpkg.bak*
           echo "✅ xcpkg patched successfully"
@@ -305,66 +245,6 @@ jobs:
               export XCPKG_COMPILER_ARGS_FOR_BUILD="$XCPKG_NATIVE_FLAGS"
           ' xcpkg
 
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("xcpkg")
-          text = path.read_text()
-
-          setup_target = '        run ./uppm install "$item"\\n'
-          setup_replacement = '''        UPPM_ITEM_ATTEMPTS=0
-                  while :
-                  do
-                      if run ./uppm install "$item"
-                      then
-                          break
-                      fi
-
-                      UPPM_ITEM_ATTEMPTS=$(expr "$UPPM_ITEM_ATTEMPTS" + 1)
-
-                      if [ "$UPPM_ITEM_ATTEMPTS" -ge "${UPPM_INSTALL_MAX_RETRIES:-5}" ] ; then
-                          abort 1 "uppm install $item failed after $UPPM_ITEM_ATTEMPTS attempts."
-                      fi
-
-                      warn "uppm install $item failed (attempt $UPPM_ITEM_ATTEMPTS). Retrying in ${UPPM_INSTALL_RETRY_DELAY:-15} seconds..."
-                      sleep "${UPPM_INSTALL_RETRY_DELAY:-15}"
-                  done
-
-          '''
-
-          pkg_target = '        run "$UPPM" install "$UPPM_PACKAGE_NAME" $UPPM_INSTALL_ARGS\\n'
-          pkg_replacement = '''        UPPM_PACKAGE_ATTEMPTS=0
-                  while :
-                  do
-                      if run "$UPPM" install "$UPPM_PACKAGE_NAME" $UPPM_INSTALL_ARGS
-                      then
-                          break
-                      fi
-
-                      UPPM_PACKAGE_ATTEMPTS=$(expr "$UPPM_PACKAGE_ATTEMPTS" + 1)
-
-                      if [ "$UPPM_PACKAGE_ATTEMPTS" -ge "${UPPM_INSTALL_MAX_RETRIES:-5}" ] ; then
-                          abort 1 "uppm install $UPPM_PACKAGE_NAME failed after $UPPM_PACKAGE_ATTEMPTS attempts."
-                      fi
-
-                      warn "uppm install $UPPM_PACKAGE_NAME failed (attempt $UPPM_PACKAGE_ATTEMPTS). Retrying in ${UPPM_INSTALL_RETRY_DELAY:-15} seconds..."
-                      sleep "${UPPM_INSTALL_RETRY_DELAY:-15}"
-                  done
-
-          '''
-
-          if setup_target not in text:
-              raise SystemExit("Could not find uppm setup install target in xcpkg")
-
-          if pkg_target not in text:
-              raise SystemExit("Could not find uppm package install target in xcpkg")
-
-          text = text.replace(setup_target, setup_replacement, 1)
-          text = text.replace(pkg_target, pkg_replacement, 1)
-
-          path.write_text(text)
-          print("✅ Added retry logic to uppm installs inside xcpkg.")
-          PY
 
           rm -f xcpkg.bak*
           echo "✅ xcpkg patched successfully"
@@ -552,3 +432,4 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
