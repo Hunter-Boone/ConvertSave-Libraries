@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       imagemagick-version:
-        description: 'ImageMagick version to build (e.g., 7.1.1-47, 7.1.1-48)'
+        description: "ImageMagick version to build (e.g., 7.1.1-47, 7.1.1-48)"
         required: true
-        default: '7.1.1-47'
+        default: "7.1.1-47"
 
 permissions:
   contents: write
@@ -60,11 +60,19 @@ jobs:
       - name: Update xcpkg formulas
         run: ./xcpkg update
 
+      - name: Patch libaom formula for portability
+        run: |
+          # Enable runtime CPU detection to avoid illegal hardware instructions on older CPUs
+          sed -i.bak "s/-DCONFIG_RUNTIME_CPU_DETECT=0/-DCONFIG_RUNTIME_CPU_DETECT=1/g" ~/.xcpkg/repos.d/official-core/formula/libaom.yml
+
+          echo "Patched libaom formula:"
+          grep "CONFIG_RUNTIME_CPU_DETECT" ~/.xcpkg/repos.d/official-core/formula/libaom.yml
+
       - name: Replace ImageMagick formula with custom version (includes libraw)
         run: |
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml \
             https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
-          
+
           # Update version if different from default
           if [ "${{ github.event.inputs.imagemagick-version }}" != "7.1.1-47" ]; then
             VERSION="${{ github.event.inputs.imagemagick-version }}"
@@ -92,7 +100,7 @@ jobs:
             echo "Updated formula:"
             grep -E "src-url:|src-sha:" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
           fi
-          
+
           echo "Custom ImageMagick formula with libraw installed"
 
       - name: Build ImageMagick with libraw support
@@ -118,18 +126,18 @@ jobs:
         run: |
           ./xcpkg bundle MacOSX-15.0-x86_64/imagemagick .tar.xz
           ls -lh *.tar.xz
-          
+
           # Extract, strip top-level directory, and repackage for ConvertSave
           mkdir -p repack
           xz -d imagemagick-*.tar.xz
           tar -xf imagemagick-*.tar --strip-components=1 -C repack/
           rm imagemagick-*.tar
-          
+
           # Create new tarball without extra directory level
           cd repack
           tar -czf ../imagemagick-macos-x86_64.tar.gz .
           cd ..
-          
+
           ls -lh imagemagick-macos-x86_64.tar.gz
           echo "Contents of archive:"
           tar -tzf imagemagick-macos-x86_64.tar.gz | head -20
@@ -189,11 +197,19 @@ jobs:
       - name: Update xcpkg formulas
         run: ./xcpkg update
 
+      - name: Patch libaom formula for portability
+        run: |
+          # Enable runtime CPU detection to avoid illegal hardware instructions on older CPUs
+          sed -i.bak "s/-DCONFIG_RUNTIME_CPU_DETECT=0/-DCONFIG_RUNTIME_CPU_DETECT=1/g" ~/.xcpkg/repos.d/official-core/formula/libaom.yml
+
+          echo "Patched libaom formula:"
+          grep "CONFIG_RUNTIME_CPU_DETECT" ~/.xcpkg/repos.d/official-core/formula/libaom.yml
+
       - name: Replace ImageMagick formula with custom version (includes libraw)
         run: |
           curl -o ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml \
             https://raw.githubusercontent.com/jakemanger/xcpkg-formula-repository-official-core/master/formula/imagemagick.yml
-          
+
           # Update version if different from default
           if [ "${{ github.event.inputs.imagemagick-version }}" != "7.1.1-47" ]; then
             VERSION="${{ github.event.inputs.imagemagick-version }}"
@@ -221,7 +237,7 @@ jobs:
             echo "Updated formula:"
             grep -E "src-url:|src-sha:" ~/.xcpkg/repos.d/official-core/formula/imagemagick.yml
           fi
-          
+
           echo "Custom ImageMagick formula with libraw installed"
 
       - name: Build ImageMagick with libraw support
@@ -247,18 +263,18 @@ jobs:
         run: |
           ./xcpkg bundle MacOSX-15.0-arm64/imagemagick .tar.xz
           ls -lh *.tar.xz
-          
+
           # Extract, strip top-level directory, and repackage for ConvertSave
           mkdir -p repack
           xz -d imagemagick-*.tar.xz
           tar -xf imagemagick-*.tar --strip-components=1 -C repack/
           rm imagemagick-*.tar
-          
+
           # Create new tarball without extra directory level
           cd repack
           tar -czf ../imagemagick-macos-arm64.tar.gz .
           cd ..
-          
+
           ls -lh imagemagick-macos-arm64.tar.gz
           echo "Contents of archive:"
           tar -tzf imagemagick-macos-arm64.tar.gz | head -20
@@ -287,12 +303,12 @@ jobs:
           name: Latest ImageMagick Build
           body: |
             Latest ImageMagick built with xcpkg (using How to Convert's patching approach)
-            
+
             ## Files:
-            
+
             - `imagemagick-macos-x86_64.tar.gz` - **Intel Macs** (x86_64)
             - `imagemagick-macos-arm64.tar.gz` - **Apple Silicon** (ARM64)
-            
+
             Built using xcpkg with How to Convert's imagemagick formula and xcpkg patches.
             Includes full libraw support for RAW image formats.
             Compatible with macOS 11+.
@@ -302,4 +318,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
