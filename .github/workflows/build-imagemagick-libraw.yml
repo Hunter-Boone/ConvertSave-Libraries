@@ -51,11 +51,128 @@ jobs:
               export XCPKG_COMPILER_ARGS_FOR_BUILD="$XCPKG_NATIVE_FLAGS"
           ' xcpkg
 
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("xcpkg")
+          text = path.read_text()
+
+          setup_target = '        run ./uppm install "$item"\\n'
+          setup_replacement = '''        UPPM_ITEM_ATTEMPTS=0
+                  while :
+                  do
+                      if run ./uppm install "$item"
+                      then
+                          break
+                      fi
+
+                      UPPM_ITEM_ATTEMPTS=$(expr "$UPPM_ITEM_ATTEMPTS" + 1)
+
+                      if [ "$UPPM_ITEM_ATTEMPTS" -ge "${UPPM_INSTALL_MAX_RETRIES:-5}" ] ; then
+                          abort 1 "uppm install $item failed after $UPPM_ITEM_ATTEMPTS attempts."
+                      fi
+
+                      warn "uppm install $item failed (attempt $UPPM_ITEM_ATTEMPTS). Retrying in ${UPPM_INSTALL_RETRY_DELAY:-15} seconds..."
+                      sleep "${UPPM_INSTALL_RETRY_DELAY:-15}"
+                  done
+
+          '''
+
+          pkg_target = '        run "$UPPM" install "$UPPM_PACKAGE_NAME" $UPPM_INSTALL_ARGS\\n'
+          pkg_replacement = '''        UPPM_PACKAGE_ATTEMPTS=0
+                  while :
+                  do
+                      if run "$UPPM" install "$UPPM_PACKAGE_NAME" $UPPM_INSTALL_ARGS
+                      then
+                          break
+                      fi
+
+                      UPPM_PACKAGE_ATTEMPTS=$(expr "$UPPM_PACKAGE_ATTEMPTS" + 1)
+
+                      if [ "$UPPM_PACKAGE_ATTEMPTS" -ge "${UPPM_INSTALL_MAX_RETRIES:-5}" ] ; then
+                          abort 1 "uppm install $UPPM_PACKAGE_NAME failed after $UPPM_PACKAGE_ATTEMPTS attempts."
+                      fi
+
+                      warn "uppm install $UPPM_PACKAGE_NAME failed (attempt $UPPM_PACKAGE_ATTEMPTS). Retrying in ${UPPM_INSTALL_RETRY_DELAY:-15} seconds..."
+                      sleep "${UPPM_INSTALL_RETRY_DELAY:-15}"
+                  done
+
+          '''
+
+          if setup_target not in text:
+              raise SystemExit("Could not find uppm setup install target in xcpkg")
+
+          if pkg_target not in text:
+              raise SystemExit("Could not find uppm package install target in xcpkg")
+
+          text = text.replace(setup_target, setup_replacement, 1)
+          text = text.replace(pkg_target, pkg_replacement, 1)
+
+          path.write_text(text)
+          print("✅ Added retry logic to uppm installs inside xcpkg.")
+          PY
+
           rm -f xcpkg.bak*
           echo "✅ xcpkg patched successfully"
 
       - name: Setup xcpkg
         run: ./xcpkg setup
+
+      - name: Wrap uppm with retry logic
+        run: |
+          set -euo pipefail
+          UPPM_CORE="$HOME/.xcpkg/core"
+          echo "Wrapping uppm in $UPPM_CORE"
+          if [ ! -d "$UPPM_CORE" ]; then
+            echo "uppm core directory not found: $UPPM_CORE"
+            exit 1
+          fi
+
+          if [ -f "$UPPM_CORE/uppm" ] && [ ! -f "$UPPM_CORE/uppm.real" ]; then
+            mv "$UPPM_CORE/uppm" "$UPPM_CORE/uppm.real"
+          fi
+
+          if [ ! -f "$UPPM_CORE/uppm.real" ]; then
+            echo "Expected uppm binary at $UPPM_CORE/uppm.real but not found"
+            ls -l "$UPPM_CORE"
+            exit 1
+          fi
+
+          WRAPPER="$UPPM_CORE/uppm"
+          REAL="$UPPM_CORE/uppm.real"
+          RETRY_MAX='${UPPM_INSTALL_MAX_RETRIES:-5}'
+          RETRY_DELAY='${UPPM_INSTALL_RETRY_DELAY:-5}'
+
+          printf '%s\n' \
+            '#!/bin/bash' \
+            'set -euo pipefail' \
+            '' \
+            'SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"' \
+            'UPPM_REAL="$SCRIPT_DIR/uppm.real"' \
+            '' \
+            'attempt=1' \
+            "max_attempts=$RETRY_MAX" \
+            '' \
+            'while true; do' \
+            '  "$UPPM_REAL" "$@"' \
+            '  status=$?' \
+            '  if [ $status -eq 0 ]; then' \
+            '    exit 0' \
+            '  fi' \
+            '' \
+            '  if [ $attempt -ge $max_attempts ]; then' \
+            '    echo "uppm failed after $max_attempts attempts (exit $status)" >&2' \
+            '    exit $status' \
+            '  fi' \
+            '' \
+            "  delay=\$((attempt * $RETRY_DELAY))" \
+            '  echo "uppm failed with status $status (attempt $attempt/$max_attempts). Retrying in ${delay}s..." >&2' \
+            '  sleep $delay' \
+            '  attempt=$((attempt + 1))' \
+            'done' \
+            > "$WRAPPER"
+
+          chmod +x "$WRAPPER"
 
       - name: Update xcpkg formulas
         run: ./xcpkg update
@@ -188,11 +305,128 @@ jobs:
               export XCPKG_COMPILER_ARGS_FOR_BUILD="$XCPKG_NATIVE_FLAGS"
           ' xcpkg
 
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("xcpkg")
+          text = path.read_text()
+
+          setup_target = '        run ./uppm install "$item"\\n'
+          setup_replacement = '''        UPPM_ITEM_ATTEMPTS=0
+                  while :
+                  do
+                      if run ./uppm install "$item"
+                      then
+                          break
+                      fi
+
+                      UPPM_ITEM_ATTEMPTS=$(expr "$UPPM_ITEM_ATTEMPTS" + 1)
+
+                      if [ "$UPPM_ITEM_ATTEMPTS" -ge "${UPPM_INSTALL_MAX_RETRIES:-5}" ] ; then
+                          abort 1 "uppm install $item failed after $UPPM_ITEM_ATTEMPTS attempts."
+                      fi
+
+                      warn "uppm install $item failed (attempt $UPPM_ITEM_ATTEMPTS). Retrying in ${UPPM_INSTALL_RETRY_DELAY:-15} seconds..."
+                      sleep "${UPPM_INSTALL_RETRY_DELAY:-15}"
+                  done
+
+          '''
+
+          pkg_target = '        run "$UPPM" install "$UPPM_PACKAGE_NAME" $UPPM_INSTALL_ARGS\\n'
+          pkg_replacement = '''        UPPM_PACKAGE_ATTEMPTS=0
+                  while :
+                  do
+                      if run "$UPPM" install "$UPPM_PACKAGE_NAME" $UPPM_INSTALL_ARGS
+                      then
+                          break
+                      fi
+
+                      UPPM_PACKAGE_ATTEMPTS=$(expr "$UPPM_PACKAGE_ATTEMPTS" + 1)
+
+                      if [ "$UPPM_PACKAGE_ATTEMPTS" -ge "${UPPM_INSTALL_MAX_RETRIES:-5}" ] ; then
+                          abort 1 "uppm install $UPPM_PACKAGE_NAME failed after $UPPM_PACKAGE_ATTEMPTS attempts."
+                      fi
+
+                      warn "uppm install $UPPM_PACKAGE_NAME failed (attempt $UPPM_PACKAGE_ATTEMPTS). Retrying in ${UPPM_INSTALL_RETRY_DELAY:-15} seconds..."
+                      sleep "${UPPM_INSTALL_RETRY_DELAY:-15}"
+                  done
+
+          '''
+
+          if setup_target not in text:
+              raise SystemExit("Could not find uppm setup install target in xcpkg")
+
+          if pkg_target not in text:
+              raise SystemExit("Could not find uppm package install target in xcpkg")
+
+          text = text.replace(setup_target, setup_replacement, 1)
+          text = text.replace(pkg_target, pkg_replacement, 1)
+
+          path.write_text(text)
+          print("✅ Added retry logic to uppm installs inside xcpkg.")
+          PY
+
           rm -f xcpkg.bak*
           echo "✅ xcpkg patched successfully"
 
       - name: Setup xcpkg
         run: ./xcpkg setup
+
+      - name: Wrap uppm with retry logic
+        run: |
+          set -euo pipefail
+          UPPM_CORE="$HOME/.xcpkg/core"
+          echo "Wrapping uppm in $UPPM_CORE"
+          if [ ! -d "$UPPM_CORE" ]; then
+            echo "uppm core directory not found: $UPPM_CORE"
+            exit 1
+          fi
+
+          if [ -f "$UPPM_CORE/uppm" ] && [ ! -f "$UPPM_CORE/uppm.real" ]; then
+            mv "$UPPM_CORE/uppm" "$UPPM_CORE/uppm.real"
+          fi
+
+          if [ ! -f "$UPPM_CORE/uppm.real" ]; then
+            echo "Expected uppm binary at $UPPM_CORE/uppm.real but not found"
+            ls -l "$UPPM_CORE"
+            exit 1
+          fi
+
+          WRAPPER="$UPPM_CORE/uppm"
+          REAL="$UPPM_CORE/uppm.real"
+          RETRY_MAX='${UPPM_INSTALL_MAX_RETRIES:-5}'
+          RETRY_DELAY='${UPPM_INSTALL_RETRY_DELAY:-5}'
+
+          printf '%s\n' \
+            '#!/bin/bash' \
+            'set -euo pipefail' \
+            '' \
+            'SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"' \
+            'UPPM_REAL="$SCRIPT_DIR/uppm.real"' \
+            '' \
+            'attempt=1' \
+            "max_attempts=$RETRY_MAX" \
+            '' \
+            'while true; do' \
+            '  "$UPPM_REAL" "$@"' \
+            '  status=$?' \
+            '  if [ $status -eq 0 ]; then' \
+            '    exit 0' \
+            '  fi' \
+            '' \
+            '  if [ $attempt -ge $max_attempts ]; then' \
+            '    echo "uppm failed after $max_attempts attempts (exit $status)" >&2' \
+            '    exit $status' \
+            '  fi' \
+            '' \
+            "  delay=\$((attempt * $RETRY_DELAY))" \
+            '  echo "uppm failed with status $status (attempt $attempt/$max_attempts). Retrying in ${delay}s..." >&2' \
+            '  sleep $delay' \
+            '  attempt=$((attempt + 1))' \
+            'done' \
+            > "$WRAPPER"
+
+          chmod +x "$WRAPPER"
 
       - name: Update xcpkg formulas
         run: ./xcpkg update
