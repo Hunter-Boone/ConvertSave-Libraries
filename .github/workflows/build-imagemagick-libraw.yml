@@ -117,33 +117,55 @@ jobs:
       - name: Update xcpkg formulas
         run: ./xcpkg update
 
-      - name: Patch all formulas to use reliable mirrors
+      - name: Pre-download problematic packages
         run: |
-          FORMULA_DIR=~/.xcpkg/repos.d/official-core/formula
+          # GitHub runners seem to have issues connecting to GNU mirrors
+          # Pre-download libtool from a reliable mirror and place in xcpkg cache
 
-          echo "Patching all formulas to replace unreliable mirrors..."
+          DOWNLOADS_DIR=~/.xcpkg/downloads
+          mkdir -p "$DOWNLOADS_DIR"
 
-          # Find all formulas that use fossies.org or ftpmirror.gnu.org and patch them
-          for formula in "$FORMULA_DIR"/*.yml; do
-            if grep -qE "fossies\.org|ftpmirror\.gnu\.org" "$formula" 2>/dev/null; then
-              echo "Patching $(basename "$formula")..."
+          echo "Pre-downloading libtool 2.4.7..."
+
+          # Try multiple reliable mirrors in order
+          LIBTOOL_VERSION="2.4.7"
+          LIBTOOL_FILE="libtool-${LIBTOOL_VERSION}.tar.xz"
+          LIBTOOL_HASH="dbbd040e363cbcb94641197c0a9389164dec4374d80c4344d5da9cea25c92d6e"
+
+          MIRRORS=(
+            "https://mirrors.kernel.org/gnu/libtool/${LIBTOOL_FILE}"
+            "https://mirror.netcologne.de/gnu/libtool/${LIBTOOL_FILE}"
+            "https://ftp.fau.de/gnu/libtool/${LIBTOOL_FILE}"
+            "https://mirror.dogado.de/gnu/libtool/${LIBTOOL_FILE}"
+          )
+
+          for mirror in "${MIRRORS[@]}"; do
+            echo "Trying mirror: $mirror"
+            if curl -L --fail --connect-timeout 10 --max-time 60 -o "$DOWNLOADS_DIR/${LIBTOOL_HASH}.tmp" "$mirror"; then
+              echo "✅ Successfully downloaded libtool from $mirror"
               
-              # Replace libtool URLs from fossies.org to kernel.org mirrors (very reliable)
-              sed -i '' 's|https\?://fossies\.org/linux/misc/libtool-\([^"]*\)|https://mirrors.kernel.org/gnu/libtool/libtool-\1|g' "$formula"
-              
-              # Replace ftpmirror.gnu.org with mirrors.kernel.org
-              sed -i '' 's|https\?://ftpmirror\.gnu\.org/gnu/\([^"]*\)|https://mirrors.kernel.org/gnu/\1|g' "$formula"
-              
-              # Show what we changed
-              echo "  New URL: $(grep 'src-url:' "$formula" | head -1)"
+              # Verify the hash
+              ACTUAL_HASH=$(shasum -a 256 "$DOWNLOADS_DIR/${LIBTOOL_HASH}.tmp" | awk '{print $1}')
+              if [ "$ACTUAL_HASH" = "$LIBTOOL_HASH" ]; then
+                echo "✅ Hash verified: $ACTUAL_HASH"
+                mv "$DOWNLOADS_DIR/${LIBTOOL_HASH}.tmp" "$DOWNLOADS_DIR/${LIBTOOL_HASH}"
+                break
+              else
+                echo "❌ Hash mismatch! Expected: $LIBTOOL_HASH, Got: $ACTUAL_HASH"
+                rm -f "$DOWNLOADS_DIR/${LIBTOOL_HASH}.tmp"
+              fi
+            else
+              echo "Failed to download from $mirror"
+              rm -f "$DOWNLOADS_DIR/${LIBTOOL_HASH}.tmp"
             fi
           done
 
-          # Clear download cache to force re-download from new URLs
-          echo "Clearing download cache..."
-          rm -rf ~/.xcpkg/downloads/* || true
-
-          echo "✅ Formula patching complete"
+          if [ -f "$DOWNLOADS_DIR/${LIBTOOL_HASH}" ]; then
+            echo "✅ libtool is ready in cache"
+            ls -lh "$DOWNLOADS_DIR/${LIBTOOL_HASH}"
+          else
+            echo "⚠️  Warning: Could not pre-download libtool, will rely on xcpkg's download"
+          fi
 
       - name: Patch libaom formula for portability
         run: |
