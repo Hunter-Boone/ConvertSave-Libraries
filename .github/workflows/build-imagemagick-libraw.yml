@@ -123,13 +123,16 @@ jobs:
 
           echo "Patching all formulas to replace unreliable mirrors..."
 
-          # Find all formulas that use fossies.org and patch them
+          # Find all formulas that use fossies.org or ftpmirror.gnu.org and patch them
           for formula in "$FORMULA_DIR"/*.yml; do
-            if grep -q "fossies.org" "$formula" 2>/dev/null; then
+            if grep -qE "fossies\.org|ftpmirror\.gnu\.org" "$formula" 2>/dev/null; then
               echo "Patching $(basename "$formula")..."
               
-              # Replace libtool URLs from fossies.org to GNU FTP
-              sed -i '' 's|https\?://fossies\.org/linux/misc/libtool-|https://ftp.gnu.org/gnu/libtool/libtool-|g' "$formula"
+              # Replace libtool URLs from fossies.org to kernel.org mirrors (very reliable)
+              sed -i '' 's|https\?://fossies\.org/linux/misc/libtool-\([^"]*\)|https://mirrors.kernel.org/gnu/libtool/libtool-\1|g' "$formula"
+              
+              # Replace ftpmirror.gnu.org with mirrors.kernel.org
+              sed -i '' 's|https\?://ftpmirror\.gnu\.org/gnu/\([^"]*\)|https://mirrors.kernel.org/gnu/\1|g' "$formula"
               
               # Show what we changed
               echo "  New URL: $(grep 'src-url:' "$formula" | head -1)"
