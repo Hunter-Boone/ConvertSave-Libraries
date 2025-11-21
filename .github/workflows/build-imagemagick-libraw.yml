@@ -117,28 +117,30 @@ jobs:
       - name: Update xcpkg formulas
         run: ./xcpkg update
 
-      - name: Patch libtool formula for reliable mirrors
+      - name: Patch all formulas to use reliable mirrors
         run: |
-          # Replace fossies.org mirror with GNU's official mirror for libtool
-          LIBTOOL_FORMULA=~/.xcpkg/repos.d/official-core/formula/libtool.yml
+          FORMULA_DIR=~/.xcpkg/repos.d/official-core/formula
 
-          if [ -f "$LIBTOOL_FORMULA" ]; then
-            echo "Original libtool formula:"
-            grep "src-url:" "$LIBTOOL_FORMULA" || true
-            
-            # Try multiple sed patterns to ensure we catch the URL
-            sed -i '' 's|https://fossies\.org/linux/misc/libtool-|https://ftp.gnu.org/gnu/libtool/libtool-|g' "$LIBTOOL_FORMULA"
-            sed -i '' 's|http://fossies\.org/linux/misc/libtool-|https://ftp.gnu.org/gnu/libtool/libtool-|g' "$LIBTOOL_FORMULA"
-            
-            echo "Patched libtool formula:"
-            grep "src-url:" "$LIBTOOL_FORMULA" || true
-            
-            # Clear any cached downloads
-            rm -f ~/.xcpkg/downloads/*libtool* || true
-          else
-            echo "Warning: libtool formula not found at $LIBTOOL_FORMULA"
-            ls -la ~/.xcpkg/repos.d/official-core/formula/ | grep -i libtool || echo "No libtool formula found"
-          fi
+          echo "Patching all formulas to replace unreliable mirrors..."
+
+          # Find all formulas that use fossies.org and patch them
+          for formula in "$FORMULA_DIR"/*.yml; do
+            if grep -q "fossies.org" "$formula" 2>/dev/null; then
+              echo "Patching $(basename "$formula")..."
+              
+              # Replace libtool URLs from fossies.org to GNU FTP
+              sed -i '' 's|https\?://fossies\.org/linux/misc/libtool-|https://ftp.gnu.org/gnu/libtool/libtool-|g' "$formula"
+              
+              # Show what we changed
+              echo "  New URL: $(grep 'src-url:' "$formula" | head -1)"
+            fi
+          done
+
+          # Clear download cache to force re-download from new URLs
+          echo "Clearing download cache..."
+          rm -rf ~/.xcpkg/downloads/* || true
+
+          echo "✅ Formula patching complete"
 
       - name: Patch libaom formula for portability
         run: |
