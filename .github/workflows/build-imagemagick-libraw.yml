@@ -120,10 +120,24 @@ jobs:
       - name: Patch libtool formula for reliable mirrors
         run: |
           # Replace fossies.org mirror with GNU's official mirror for libtool
-          if [ -f ~/.xcpkg/repos.d/official-core/formula/libtool.yml ]; then
-            sed -i.bak 's|https://fossies.org/linux/misc/libtool-|https://ftp.gnu.org/gnu/libtool/libtool-|g' ~/.xcpkg/repos.d/official-core/formula/libtool.yml
-            echo "Patched libtool formula to use GNU mirror:"
-            grep "src-url:" ~/.xcpkg/repos.d/official-core/formula/libtool.yml || true
+          LIBTOOL_FORMULA=~/.xcpkg/repos.d/official-core/formula/libtool.yml
+
+          if [ -f "$LIBTOOL_FORMULA" ]; then
+            echo "Original libtool formula:"
+            grep "src-url:" "$LIBTOOL_FORMULA" || true
+            
+            # Try multiple sed patterns to ensure we catch the URL
+            sed -i '' 's|https://fossies\.org/linux/misc/libtool-|https://ftp.gnu.org/gnu/libtool/libtool-|g' "$LIBTOOL_FORMULA"
+            sed -i '' 's|http://fossies\.org/linux/misc/libtool-|https://ftp.gnu.org/gnu/libtool/libtool-|g' "$LIBTOOL_FORMULA"
+            
+            echo "Patched libtool formula:"
+            grep "src-url:" "$LIBTOOL_FORMULA" || true
+            
+            # Clear any cached downloads
+            rm -f ~/.xcpkg/downloads/*libtool* || true
+          else
+            echo "Warning: libtool formula not found at $LIBTOOL_FORMULA"
+            ls -la ~/.xcpkg/repos.d/official-core/formula/ | grep -i libtool || echo "No libtool formula found"
           fi
 
       - name: Patch libaom formula for portability
