@@ -117,7 +117,7 @@ jobs:
       - name: Update xcpkg formulas
         run: ./xcpkg update
 
-      - name: Pre-download problematic packages
+      - name: Pre-download problematic packages and patch formulas
         run: |
           # GitHub runners seem to have issues connecting to GNU mirrors
           # Pre-download libtool from a reliable mirror and place in xcpkg cache
@@ -165,6 +165,26 @@ jobs:
             ls -lh "$DOWNLOADS_DIR/${LIBTOOL_HASH}"
           else
             echo "⚠️  Warning: Could not pre-download libtool, will rely on xcpkg's download"
+          fi
+
+          echo ""
+          echo "Patching libtool formula to use only reliable mirrors..."
+          LIBTOOL_FORMULA=~/.xcpkg/repos.d/official-core/formula/libtool.yml
+
+          if [ -f "$LIBTOOL_FORMULA" ]; then
+            echo "Original mirrors:"
+            grep -A 10 "src-url:" "$LIBTOOL_FORMULA" || true
+            
+            # Replace all unreliable mirrors with reliable ones
+            # Remove ftpmirror.gnu.org, ftp.gnu.org, fossies.org
+            sed -i '' 's|https\?://ftpmirror\.gnu\.org/gnu/libtool/|https://mirrors.kernel.org/gnu/libtool/|g' "$LIBTOOL_FORMULA"
+            sed -i '' 's|https\?://ftp\.gnu\.org/gnu/libtool/|https://mirrors.kernel.org/gnu/libtool/|g' "$LIBTOOL_FORMULA"
+            sed -i '' 's|https\?://fossies\.org/linux/misc/|https://mirrors.kernel.org/gnu/|g' "$LIBTOOL_FORMULA"
+            sed -i '' 's|https\?://distfiles\.macports\.org/libjbig2dec/|https://mirror.netcologne.de/gnu/|g' "$LIBTOOL_FORMULA"
+            
+            echo ""
+            echo "Patched mirrors:"
+            grep -A 10 "src-url:" "$LIBTOOL_FORMULA" || true
           fi
 
       - name: Patch libaom formula for portability
