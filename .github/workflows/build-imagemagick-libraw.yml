@@ -117,6 +117,15 @@ jobs:
       - name: Update xcpkg formulas
         run: ./xcpkg update
 
+      - name: Patch libtool formula for reliable mirrors
+        run: |
+          # Replace fossies.org mirror with GNU's official mirror for libtool
+          if [ -f ~/.xcpkg/repos.d/official-core/formula/libtool.yml ]; then
+            sed -i.bak 's|https://fossies.org/linux/misc/libtool-|https://ftp.gnu.org/gnu/libtool/libtool-|g' ~/.xcpkg/repos.d/official-core/formula/libtool.yml
+            echo "Patched libtool formula to use GNU mirror:"
+            grep "src-url:" ~/.xcpkg/repos.d/official-core/formula/libtool.yml || true
+          fi
+
       - name: Patch libaom formula for portability
         run: |
           # Enable runtime CPU detection to avoid illegal hardware instructions on older CPUs
