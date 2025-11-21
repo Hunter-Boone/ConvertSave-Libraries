@@ -172,19 +172,28 @@ jobs:
           LIBTOOL_FORMULA=~/.xcpkg/repos.d/official-core/formula/libtool.yml
 
           if [ -f "$LIBTOOL_FORMULA" ]; then
-            echo "Original mirrors:"
-            grep -A 10 "src-url:" "$LIBTOOL_FORMULA" || true
-            
-            # Replace all unreliable mirrors with reliable ones
-            # Remove ftpmirror.gnu.org, ftp.gnu.org, fossies.org
-            sed -i '' 's|https\?://ftpmirror\.gnu\.org/gnu/libtool/|https://mirrors.kernel.org/gnu/libtool/|g' "$LIBTOOL_FORMULA"
-            sed -i '' 's|https\?://ftp\.gnu\.org/gnu/libtool/|https://mirrors.kernel.org/gnu/libtool/|g' "$LIBTOOL_FORMULA"
-            sed -i '' 's|https\?://fossies\.org/linux/misc/|https://mirrors.kernel.org/gnu/|g' "$LIBTOOL_FORMULA"
-            sed -i '' 's|https\?://distfiles\.macports\.org/libjbig2dec/|https://mirror.netcologne.de/gnu/|g' "$LIBTOOL_FORMULA"
+            echo "Original formula:"
+            cat "$LIBTOOL_FORMULA"
             
             echo ""
-            echo "Patched mirrors:"
-            grep -A 10 "src-url:" "$LIBTOOL_FORMULA" || true
+            echo "Removing unreliable mirrors..."
+            
+            # Remove lines containing unreliable mirrors
+            grep -v "ftpmirror.gnu.org" "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.tmp" || true
+            mv "${LIBTOOL_FORMULA}.tmp" "$LIBTOOL_FORMULA"
+            
+            grep -v "ftp.gnu.org" "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.tmp" || true
+            mv "${LIBTOOL_FORMULA}.tmp" "$LIBTOOL_FORMULA"
+            
+            grep -v "fossies.org" "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.tmp" || true
+            mv "${LIBTOOL_FORMULA}.tmp" "$LIBTOOL_FORMULA"
+            
+            grep -v "distfiles.macports.org" "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.tmp" || true
+            mv "${LIBTOOL_FORMULA}.tmp" "$LIBTOOL_FORMULA"
+            
+            echo ""
+            echo "Patched formula:"
+            cat "$LIBTOOL_FORMULA"
           fi
 
       - name: Patch libaom formula for portability
