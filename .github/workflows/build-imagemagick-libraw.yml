@@ -168,32 +168,43 @@ jobs:
           fi
 
           echo ""
-          echo "Patching libtool formula to use only reliable mirrors..."
+          echo "Forcing libtool formula to use local file..."
           LIBTOOL_FORMULA=~/.xcpkg/repos.d/official-core/formula/libtool.yml
 
           if [ -f "$LIBTOOL_FORMULA" ]; then
-            echo "Original formula:"
-            cat "$LIBTOOL_FORMULA"
-            
-            echo ""
-            echo "Removing unreliable mirrors..."
-            
-            # Remove lines containing unreliable mirrors
-            grep -v "ftpmirror.gnu.org" "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.tmp" || true
-            mv "${LIBTOOL_FORMULA}.tmp" "$LIBTOOL_FORMULA"
-            
-            grep -v "ftp.gnu.org" "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.tmp" || true
-            mv "${LIBTOOL_FORMULA}.tmp" "$LIBTOOL_FORMULA"
-            
-            grep -v "fossies.org" "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.tmp" || true
-            mv "${LIBTOOL_FORMULA}.tmp" "$LIBTOOL_FORMULA"
-            
-            grep -v "distfiles.macports.org" "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.tmp" || true
-            mv "${LIBTOOL_FORMULA}.tmp" "$LIBTOOL_FORMULA"
-            
-            echo ""
-            echo "Patched formula:"
-            cat "$LIBTOOL_FORMULA"
+            # Verify we have the file
+            if [ -f "$DOWNLOADS_DIR/${LIBTOOL_HASH}" ]; then
+              echo "Found pre-downloaded file, updating formula to use it..."
+              
+              # Create a temporary formula with just the local file URL
+              # We use sed to replace the entire src-url block with just our local file
+              # This ensures no other mirrors are tried
+              
+              # First, find the line number where src-url starts
+              START_LINE=$(grep -n "src-url:" "$LIBTOOL_FORMULA" | cut -d: -f1)
+              
+              if [ -n "$START_LINE" ]; then
+                # Read the file up to the src-url line
+                head -n $((START_LINE - 1)) "$LIBTOOL_FORMULA" > "${LIBTOOL_FORMULA}.new"
+                
+                # Add our local file URL
+                echo "src-url: file://$DOWNLOADS_DIR/${LIBTOOL_HASH}" >> "${LIBTOOL_FORMULA}.new"
+                
+                # Read the rest of the file, skipping the src-url section
+                # We assume src-url is followed by src-sha
+                TAIL_LINE=$(grep -n "src-sha:" "$LIBTOOL_FORMULA" | cut -d: -f1)
+                tail -n +$TAIL_LINE "$LIBTOOL_FORMULA" >> "${LIBTOOL_FORMULA}.new"
+                
+                mv "${LIBTOOL_FORMULA}.new" "$LIBTOOL_FORMULA"
+                
+                echo "✅ Updated formula to use local file:"
+                grep "src-url:" "$LIBTOOL_FORMULA"
+              else
+                echo "❌ Could not find src-url in formula"
+              fi
+            else
+              echo "❌ Pre-downloaded file not found, cannot patch formula"
+            fi
           fi
 
       - name: Patch libaom formula for portability
