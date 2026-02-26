@@ -100,18 +100,14 @@ jobs:
 
       - name: Hide Homebrew dylibs (force static linking)
         run: |
-          for pkg in libvpx aom rav1e webp opus libvorbis lame zimg libxml2; do
-            pkg_lib="$(brew --prefix $pkg)/lib" 2>/dev/null || continue
-            if [ -d "$pkg_lib" ]; then
-              for dylib in "$pkg_lib"/*.dylib; do
-                if [ -f "$dylib" ]; then
-                  mv "$dylib" "${dylib}.hidden"
-                  echo "  Hidden: $(basename $dylib)"
-                fi
-              done
-            fi
+          BREW_PREFIX="$(brew --prefix)"
+          echo "Hiding all Homebrew dylibs in $BREW_PREFIX/Cellar to force static linking..."
+          hidden_count=0
+          find "$BREW_PREFIX/Cellar" -name "*.dylib" -type f | while read dylib; do
+            mv "$dylib" "${dylib}.hidden"
+            hidden_count=$((hidden_count + 1))
           done
-          echo "Dylibs hidden — linker will use static .a files"
+          echo "Done — dylibs hidden, linker will use static .a files"
 
       - name: Configure FFmpeg
         run: |
@@ -153,6 +149,11 @@ jobs:
             --enable-libxml2 \
             --enable-zlib \
             --enable-lzma \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-libxcb-shm \
+            --disable-libxcb-xfixes \
+            --disable-libxcb-shape \
             --extra-cflags="-I${BREW_PREFIX}/include -mmacosx-version-min=11.0" \
             --extra-ldflags="-L${BREW_PREFIX}/lib -mmacosx-version-min=11.0"
 
@@ -172,15 +173,9 @@ jobs:
       - name: Restore Homebrew dylibs
         if: always()
         run: |
-          for pkg in libvpx aom rav1e webp opus libvorbis lame zimg libxml2; do
-            pkg_lib="$(brew --prefix $pkg)/lib" 2>/dev/null || continue
-            if [ -d "$pkg_lib" ]; then
-              for dylib in "$pkg_lib"/*.dylib.hidden; do
-                if [ -f "$dylib" ]; then
-                  mv "$dylib" "${dylib%.hidden}"
-                fi
-              done
-            fi
+          BREW_PREFIX="$(brew --prefix)"
+          find "$BREW_PREFIX/Cellar" -name "*.dylib.hidden" -type f | while read dylib; do
+            mv "$dylib" "${dylib%.hidden}"
           done
           echo "Dylibs restored"
 
