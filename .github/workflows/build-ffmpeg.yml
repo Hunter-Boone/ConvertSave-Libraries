@@ -100,12 +100,30 @@ jobs:
 
       - name: Hide Homebrew dylibs (force static linking)
         run: |
-          BREW_PREFIX="$(brew --prefix)"
-          echo "Hiding all Homebrew dylibs in $BREW_PREFIX/Cellar to force static linking..."
-          hidden_count=0
-          find "$BREW_PREFIX/Cellar" -name "*.dylib" -type f | while read dylib; do
-            mv "$dylib" "${dylib}.hidden"
-            hidden_count=$((hidden_count + 1))
+          DIRECT_DEPS="libvpx aom rav1e webp opus libvorbis lame zimg libxml2"
+
+          # Collect all transitive dependencies via brew deps
+          ALL_PKGS=""
+          for pkg in $DIRECT_DEPS; do
+            ALL_PKGS="$ALL_PKGS $pkg"
+            deps=$(brew deps $pkg 2>/dev/null || true)
+            ALL_PKGS="$ALL_PKGS $deps"
+          done
+          ALL_PKGS=$(echo "$ALL_PKGS" | tr ' ' '\n' | sort -u | grep -v '^$')
+
+          echo "Packages to hide dylibs for:"
+          echo "$ALL_PKGS"
+
+          for pkg in $ALL_PKGS; do
+            pkg_lib="$(brew --prefix $pkg 2>/dev/null)/lib" || continue
+            if [ -d "$pkg_lib" ]; then
+              for dylib in "$pkg_lib"/*.dylib; do
+                if [ -f "$dylib" ]; then
+                  mv "$dylib" "${dylib}.hidden"
+                  echo "  Hidden: $pkg — $(basename $dylib)"
+                fi
+              done
+            fi
           done
           echo "Done — dylibs hidden, linker will use static .a files"
 
@@ -173,9 +191,24 @@ jobs:
       - name: Restore Homebrew dylibs
         if: always()
         run: |
-          BREW_PREFIX="$(brew --prefix)"
-          find "$BREW_PREFIX/Cellar" -name "*.dylib.hidden" -type f | while read dylib; do
-            mv "$dylib" "${dylib%.hidden}"
+          DIRECT_DEPS="libvpx aom rav1e webp opus libvorbis lame zimg libxml2"
+          ALL_PKGS=""
+          for pkg in $DIRECT_DEPS; do
+            ALL_PKGS="$ALL_PKGS $pkg"
+            deps=$(brew deps $pkg 2>/dev/null || true)
+            ALL_PKGS="$ALL_PKGS $deps"
+          done
+          ALL_PKGS=$(echo "$ALL_PKGS" | tr ' ' '\n' | sort -u | grep -v '^$')
+
+          for pkg in $ALL_PKGS; do
+            pkg_lib="$(brew --prefix $pkg 2>/dev/null)/lib" || continue
+            if [ -d "$pkg_lib" ]; then
+              for dylib in "$pkg_lib"/*.dylib.hidden; do
+                if [ -f "$dylib" ]; then
+                  mv "$dylib" "${dylib%.hidden}"
+                fi
+              done
+            fi
           done
           echo "Dylibs restored"
 
