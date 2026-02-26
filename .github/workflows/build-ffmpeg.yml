@@ -102,13 +102,21 @@ jobs:
         run: |
           cd ffmpeg-src
 
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            BREW_PREFIX="/opt/homebrew"
-          else
-            BREW_PREFIX="/usr/local"
-          fi
+          BREW_PREFIX="$(brew --prefix)"
+          echo "Homebrew prefix: $BREW_PREFIX"
 
-          export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/opt/libxml2/lib/pkgconfig"
+          # Build PKG_CONFIG_PATH from all installed Homebrew packages
+          PKG_CONFIG_DIRS="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/share/pkgconfig"
+          for pkg in lame libvpx aom rav1e webp opus libvorbis zimg libxml2; do
+            pkg_dir="${BREW_PREFIX}/opt/${pkg}/lib/pkgconfig"
+            if [ -d "$pkg_dir" ]; then
+              PKG_CONFIG_DIRS="${pkg_dir}:${PKG_CONFIG_DIRS}"
+              echo "  Found pkgconfig for $pkg"
+            fi
+          done
+          export PKG_CONFIG_PATH="$PKG_CONFIG_DIRS"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+
           export MACOSX_DEPLOYMENT_TARGET=11.0
 
           ./configure \
@@ -130,8 +138,8 @@ jobs:
             --enable-libxml2 \
             --enable-zlib \
             --enable-lzma \
-            --extra-cflags="-mmacosx-version-min=11.0" \
-            --extra-ldflags="-mmacosx-version-min=11.0"
+            --extra-cflags="-I${BREW_PREFIX}/include -mmacosx-version-min=11.0" \
+            --extra-ldflags="-L${BREW_PREFIX}/lib -mmacosx-version-min=11.0"
 
           echo "=== Configure summary ==="
           tail -30 ffbuild/config.log || true
@@ -158,11 +166,7 @@ jobs:
           echo "=== Copying FFmpeg shared libraries ==="
           cp lib/*.dylib package/
 
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            BREW_PREFIX="/opt/homebrew"
-          else
-            BREW_PREFIX="/usr/local"
-          fi
+          BREW_PREFIX="$(brew --prefix)"
 
           # Recursively copy all non-system dylib dependencies
           copy_deps() {
