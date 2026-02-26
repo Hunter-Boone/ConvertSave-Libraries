@@ -80,7 +80,7 @@ jobs:
 
   build-macos:
     needs: prepare
-    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-14' }}
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }}
     strategy:
       matrix:
         arch: [x86_64, arm64]
@@ -91,7 +91,7 @@ jobs:
       - name: Install dependencies
         run: |
           brew install pkg-config nasm \
-            libvpx libaom rav1e webp opus libvorbis lame wavpack zimg libxml2
+            libvpx aom rav1e webp opus libvorbis lame zimg libxml2
 
       - name: Clone FFmpeg source
         run: |
@@ -126,7 +126,6 @@ jobs:
             --enable-libopus \
             --enable-libvorbis \
             --enable-libmp3lame \
-            --enable-libwavpack \
             --enable-libzimg \
             --enable-libxml2 \
             --enable-zlib \
@@ -282,7 +281,6 @@ jobs:
             mingw-w64-x86_64-opus
             mingw-w64-x86_64-libvorbis
             mingw-w64-x86_64-lame
-            mingw-w64-x86_64-wavpack
             mingw-w64-x86_64-zimg
             mingw-w64-x86_64-zlib
             make
@@ -310,7 +308,6 @@ jobs:
             --enable-libopus \
             --enable-libvorbis \
             --enable-libmp3lame \
-            --enable-libwavpack \
             --enable-libzimg \
             --enable-zlib
 
@@ -431,7 +428,6 @@ jobs:
             libopus-dev \
             libvorbis-dev \
             libmp3lame-dev \
-            libwavpack-dev \
             libzimg-dev \
             zlib1g-dev \
             liblzma-dev
@@ -456,7 +452,6 @@ jobs:
             --enable-libopus \
             --enable-libvorbis \
             --enable-libmp3lame \
-            --enable-libwavpack \
             --enable-libzimg \
             --enable-zlib \
             --enable-lzma

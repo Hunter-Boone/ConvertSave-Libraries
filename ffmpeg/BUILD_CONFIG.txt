@@ -8,6 +8,9 @@ Dynamic linking is used on all platforms (--enable-shared --disable-static).
 Source: https://github.com/FFmpeg/FFmpeg
 License: LGPLv2.1+
 
+Note: --enable-libwavpack is not available in FFmpeg 7.x (the option was removed).
+FFmpeg's built-in/native WavPack decoder is still included automatically.
+
 
 macOS (x86_64 and arm64)
 ------------------------
@@ -26,14 +29,13 @@ macOS (x86_64 and arm64)
     --enable-libopus \
     --enable-libvorbis \
     --enable-libmp3lame \
-    --enable-libwavpack \
     --enable-libzimg \
     --enable-libxml2 \
     --enable-zlib \
     --enable-lzma
 
 Dependencies (installed via Homebrew):
-  libvpx, libaom, rav1e, webp, opus, libvorbis, lame, wavpack, zimg, libxml2
+  libvpx, aom, rav1e, webp, opus, libvorbis, lame, zimg, libxml2
 
 
 Windows (x86_64)
@@ -50,7 +52,6 @@ Windows (x86_64)
     --enable-libopus \
     --enable-libvorbis \
     --enable-libmp3lame \
-    --enable-libwavpack \
     --enable-libzimg \
     --enable-zlib
 
@@ -58,7 +59,7 @@ Dependencies (installed via MSYS2 pacman):
   mingw-w64-x86_64-libvpx, mingw-w64-x86_64-aom,
   mingw-w64-x86_64-libwebp, mingw-w64-x86_64-opus,
   mingw-w64-x86_64-libvorbis, mingw-w64-x86_64-lame,
-  mingw-w64-x86_64-wavpack, mingw-w64-x86_64-zimg
+  mingw-w64-x86_64-zimg
 
 
 Linux (x86_64)
@@ -74,14 +75,13 @@ Linux (x86_64)
     --enable-libopus \
     --enable-libvorbis \
     --enable-libmp3lame \
-    --enable-libwavpack \
     --enable-libzimg \
     --enable-zlib \
     --enable-lzma
 
 Dependencies (installed via apt):
   libvpx-dev, libaom-dev, libwebp-dev, libopus-dev,
-  libvorbis-dev, libmp3lame-dev, libwavpack-dev,
+  libvorbis-dev, libmp3lame-dev,
   libzimg-dev, zlib1g-dev, liblzma-dev, nasm
 
 
