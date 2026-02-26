@@ -1,0 +1,599 @@
+name: Build FFmpeg (LGPL)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ffmpeg-version:
+        description: "FFmpeg version tag (e.g., n7.1)"
+        required: true
+        default: "n7.1"
+      release-tag:
+        description: "Release tag name (e.g., ffmpeg-7.1)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release-tag: ${{ steps.version.outputs.release-tag }}
+    steps:
+      - name: Set version info
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.ffmpeg-version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release-tag=${{ github.event.inputs.release-tag }}" >> $GITHUB_OUTPUT
+          echo "Building FFmpeg $VERSION"
+
+      - name: Verify tag exists on FFmpeg repo
+        run: |
+          VERSION="${{ github.event.inputs.ffmpeg-version }}"
+          git ls-remote --tags https://github.com/FFmpeg/FFmpeg.git "refs/tags/$VERSION" | grep -q "$VERSION" || {
+            echo "ERROR: Tag $VERSION not found in FFmpeg repository"
+            echo "Browse available tags: https://github.com/FFmpeg/FFmpeg/tags"
+            exit 1
+          }
+          echo "Tag $VERSION exists"
+
+  build-source-tarball:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ConvertSave-Libraries
+        uses: actions/checkout@v4
+
+      - name: Clone FFmpeg source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch "$VERSION" https://github.com/FFmpeg/FFmpeg.git ffmpeg-source
+          cd ffmpeg-source
+          echo "Cloned FFmpeg at tag $VERSION"
+          echo "Commit: $(git rev-parse HEAD)"
+
+      - name: Generate compliance files
+        run: |
+          cd ffmpeg-source
+          git diff > changes.diff
+          echo "changes.diff created (should be empty for unmodified source)"
+          wc -c changes.diff
+
+          cp ../ffmpeg/BUILD_CONFIG.txt .
+          echo "BUILD_CONFIG.txt copied into source root"
+
+      - name: Create source tarball
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          tar czf "ffmpeg-${VERSION}-source.tar.gz" ffmpeg-source/
+          echo "Source tarball created:"
+          ls -lh "ffmpeg-${VERSION}-source.tar.gz"
+
+      - name: Upload source tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-source
+          path: ffmpeg-${{ needs.prepare.outputs.version }}-source.tar.gz
+          retention-days: 30
+
+  build-macos:
+    needs: prepare
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-14' }}
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Checkout ConvertSave-Libraries
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install pkg-config nasm \
+            libvpx libaom rav1e webp opus libvorbis lame wavpack zimg libxml2
+
+      - name: Clone FFmpeg source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch "$VERSION" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
+
+      - name: Configure FFmpeg
+        run: |
+          cd ffmpeg-src
+
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            BREW_PREFIX="/opt/homebrew"
+          else
+            BREW_PREFIX="/usr/local"
+          fi
+
+          export PKG_CONFIG_PATH="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/opt/libxml2/lib/pkgconfig"
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+
+          ./configure \
+            --prefix=$PWD/../ffmpeg-build \
+            --disable-static \
+            --enable-shared \
+            --enable-version3 \
+            --enable-videotoolbox \
+            --enable-avfoundation \
+            --enable-audiotoolbox \
+            --enable-libvpx \
+            --enable-libaom \
+            --enable-librav1e \
+            --enable-libwebp \
+            --enable-libopus \
+            --enable-libvorbis \
+            --enable-libmp3lame \
+            --enable-libwavpack \
+            --enable-libzimg \
+            --enable-libxml2 \
+            --enable-zlib \
+            --enable-lzma \
+            --extra-cflags="-mmacosx-version-min=11.0" \
+            --extra-ldflags="-mmacosx-version-min=11.0"
+
+          echo "=== Configure summary ==="
+          tail -30 ffbuild/config.log || true
+
+      - name: Build FFmpeg
+        run: |
+          cd ffmpeg-src
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Install FFmpeg
+        run: |
+          cd ffmpeg-src
+          make install
+
+      - name: Package FFmpeg
+        run: |
+          cd ffmpeg-build
+          mkdir -p package
+
+          # Flat structure: binary + all dylibs in same directory
+          cp bin/ffmpeg package/
+          cp bin/ffprobe package/
+
+          echo "=== Copying FFmpeg shared libraries ==="
+          cp lib/*.dylib package/
+
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            BREW_PREFIX="/opt/homebrew"
+          else
+            BREW_PREFIX="/usr/local"
+          fi
+
+          # Recursively copy all non-system dylib dependencies
+          copy_deps() {
+            local binary="$1"
+            local level="${2:-0}"
+            local indent=$(printf '%*s' $((level * 2)) '')
+
+            otool -L "$binary" 2>/dev/null | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+              local dep_name=$(basename "$dep")
+              local dest="package/$dep_name"
+
+              if [ ! -f "$dest" ]; then
+                if [ -f "$dep" ]; then
+                  echo "${indent}  Copying: $dep_name"
+                  cp "$dep" "$dest"
+                  copy_deps "$dest" $((level + 1))
+                elif [ -f "$BREW_PREFIX/lib/$dep_name" ]; then
+                  echo "${indent}  Copying: $dep_name (from Homebrew)"
+                  cp "$BREW_PREFIX/lib/$dep_name" "$dest"
+                  copy_deps "$dest" $((level + 1))
+                else
+                  local found_path=$(find "$BREW_PREFIX/Cellar" -name "$dep_name" 2>/dev/null | head -1)
+                  if [ -n "$found_path" ] && [ -f "$found_path" ]; then
+                    echo "${indent}  Copying: $dep_name (from Cellar)"
+                    cp "$found_path" "$dest"
+                    copy_deps "$dest" $((level + 1))
+                  else
+                    echo "${indent}  WARNING: Not found: $dep_name"
+                  fi
+                fi
+              fi
+            done
+          }
+
+          echo "=== Resolving dependencies for ffmpeg ==="
+          copy_deps "package/ffmpeg" 0
+          echo "=== Resolving dependencies for ffprobe ==="
+          copy_deps "package/ffprobe" 0
+
+          echo "=== Resolving dependencies for libraries (multiple passes) ==="
+          for pass in 1 2 3; do
+            echo "Pass $pass..."
+            for dylib in package/*.dylib; do
+              [ -f "$dylib" ] && copy_deps "$dylib" 0
+            done
+          done
+
+          echo "=== Bundled libraries ==="
+          ls -lh package/*.dylib
+
+          # Fix library paths: use @loader_path so libs find each other in the same directory
+          echo "=== Fixing library paths ==="
+          for dylib in package/*.dylib; do
+            if [ -f "$dylib" ]; then
+              install_name_tool -id "@loader_path/$(basename $dylib)" "$dylib"
+              otool -L "$dylib" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+                install_name_tool -change "$dep" "@loader_path/$(basename $dep)" "$dylib" 2>/dev/null || true
+              done
+            fi
+          done
+
+          # Fix binaries: use @executable_path so they find dylibs in the same directory
+          for bin in package/ffmpeg package/ffprobe; do
+            otool -L "$bin" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+              install_name_tool -change "$dep" "@executable_path/$(basename $dep)" "$bin" 2>/dev/null || true
+            done
+          done
+
+          echo "=== Verifying ffmpeg binary ==="
+          otool -L package/ffmpeg
+
+          cd package
+          zip -r "../../ffmpeg-macos-${{ matrix.arch }}.zip" .
+
+      - name: Verify LGPL compliance
+        run: |
+          cd ffmpeg-build
+          echo "=== Checking FFmpeg configuration ==="
+          if package/ffmpeg -version 2>&1 | grep -qi "enable-gpl"; then
+            echo "ERROR: GPL is enabled! This build is not LGPL-compliant."
+            exit 1
+          fi
+          echo "LGPL compliance check passed"
+          package/ffmpeg -version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-macos-${{ matrix.arch }}
+          path: ffmpeg-macos-${{ matrix.arch }}.zip
+          retention-days: 30
+
+  build-windows:
+    needs: prepare
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout ConvertSave-Libraries
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-yasm
+            mingw-w64-x86_64-libvpx
+            mingw-w64-x86_64-aom
+            mingw-w64-x86_64-libwebp
+            mingw-w64-x86_64-opus
+            mingw-w64-x86_64-libvorbis
+            mingw-w64-x86_64-lame
+            mingw-w64-x86_64-wavpack
+            mingw-w64-x86_64-zimg
+            mingw-w64-x86_64-zlib
+            make
+            diffutils
+            git
+
+      - name: Clone FFmpeg source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch "$VERSION" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
+
+      - name: Configure FFmpeg
+        run: |
+          cd ffmpeg-src
+
+          ./configure \
+            --prefix=$PWD/../ffmpeg-build \
+            --disable-static \
+            --enable-shared \
+            --enable-version3 \
+            --enable-mediafoundation \
+            --enable-libvpx \
+            --enable-libaom \
+            --enable-libwebp \
+            --enable-libopus \
+            --enable-libvorbis \
+            --enable-libmp3lame \
+            --enable-libwavpack \
+            --enable-libzimg \
+            --enable-zlib
+
+      - name: Build FFmpeg
+        run: |
+          cd ffmpeg-src
+          make -j$(nproc)
+
+      - name: Install FFmpeg
+        run: |
+          cd ffmpeg-src
+          make install
+
+      - name: Package FFmpeg
+        run: |
+          cd ffmpeg-build
+          mkdir -p package
+
+          cp bin/ffmpeg.exe package/
+          cp bin/ffprobe.exe package/
+
+          # Copy FFmpeg DLLs
+          echo "=== Copying FFmpeg DLLs ==="
+          cp bin/*.dll package/ 2>/dev/null || true
+
+          # Copy dependency DLLs from MinGW
+          echo "=== Resolving DLL dependencies ==="
+          MINGW_BIN="/mingw64/bin"
+
+          copy_dll_deps() {
+            local binary="$1"
+            objdump -p "$binary" 2>/dev/null | grep "DLL Name:" | awk '{print $3}' | while read dll; do
+              local dest="package/$dll"
+              if [ ! -f "$dest" ]; then
+                if [ -f "$MINGW_BIN/$dll" ]; then
+                  # Skip Windows system DLLs
+                  case "$dll" in
+                    KERNEL32.dll|kernel32.dll|ADVAPI32.dll|advapi32.dll|USER32.dll|user32.dll|\
+                    GDI32.dll|gdi32.dll|SHELL32.dll|shell32.dll|ole32.dll|OLE32.dll|\
+                    OLEAUT32.dll|oleaut32.dll|COMCTL32.dll|comctl32.dll|COMDLG32.dll|\
+                    WS2_32.dll|ws2_32.dll|WSOCK32.dll|wsock32.dll|IMM32.dll|imm32.dll|\
+                    WINMM.dll|winmm.dll|VERSION.dll|version.dll|SHLWAPI.dll|shlwapi.dll|\
+                    SETUPAPI.dll|setupapi.dll|msvcrt.dll|MSVCRT.dll|ntdll.dll|NTDLL.dll|\
+                    bcrypt.dll|BCRYPT.dll|CRYPT32.dll|crypt32.dll|Secur32.dll|SECUR32.dll|\
+                    MFPLAT.DLL|mfplat.dll|MFReadWrite.dll|api-ms-*|ext-ms-*|d3d*.dll|dxgi*.dll|\
+                    ucrtbase.dll|UCRTBASE.dll|VCRUNTIME*.dll|msvcp*.dll)
+                      ;;
+                    *)
+                      echo "  Copying: $dll"
+                      cp "$MINGW_BIN/$dll" "$dest"
+                      copy_dll_deps "$dest"
+                      ;;
+                  esac
+                fi
+              fi
+            done
+          }
+
+          for exe in package/ffmpeg.exe package/ffprobe.exe; do
+            echo "=== Dependencies for $(basename $exe) ==="
+            copy_dll_deps "$exe"
+          done
+
+          # Multiple passes for transitive deps
+          for pass in 1 2 3; do
+            echo "=== DLL dependency pass $pass ==="
+            for dll in package/*.dll; do
+              [ -f "$dll" ] && copy_dll_deps "$dll"
+            done
+          done
+
+          echo "=== Package contents ==="
+          ls -lh package/
+
+      - name: Verify LGPL compliance
+        shell: pwsh
+        run: |
+          Write-Host "=== Checking FFmpeg configuration ==="
+          $version = & ffmpeg-build/package/ffmpeg.exe -version 2>&1 | Out-String
+          if ($version -match "enable-gpl") {
+            Write-Host "ERROR: GPL is enabled! This build is not LGPL-compliant."
+            exit 1
+          }
+          Write-Host "LGPL compliance check passed"
+          Write-Host $version
+
+      - name: Create zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ffmpeg-build/package/* -DestinationPath ffmpeg-windows-x64.zip
+          Write-Host "Created ffmpeg-windows-x64.zip"
+          Get-Item ffmpeg-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-x64
+          path: ffmpeg-windows-x64.zip
+          retention-days: 30
+
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ConvertSave-Libraries
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            nasm \
+            libvpx-dev \
+            libaom-dev \
+            libwebp-dev \
+            libopus-dev \
+            libvorbis-dev \
+            libmp3lame-dev \
+            libwavpack-dev \
+            libzimg-dev \
+            zlib1g-dev \
+            liblzma-dev
+
+      - name: Clone FFmpeg source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch "$VERSION" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
+
+      - name: Configure FFmpeg
+        run: |
+          cd ffmpeg-src
+
+          ./configure \
+            --prefix=$PWD/../ffmpeg-build \
+            --disable-static \
+            --enable-shared \
+            --enable-version3 \
+            --enable-libvpx \
+            --enable-libaom \
+            --enable-libwebp \
+            --enable-libopus \
+            --enable-libvorbis \
+            --enable-libmp3lame \
+            --enable-libwavpack \
+            --enable-libzimg \
+            --enable-zlib \
+            --enable-lzma
+
+      - name: Build FFmpeg
+        run: |
+          cd ffmpeg-src
+          make -j$(nproc)
+
+      - name: Install FFmpeg
+        run: |
+          cd ffmpeg-src
+          make install
+
+      - name: Install patchelf
+        run: sudo apt-get install -y patchelf
+
+      - name: Package FFmpeg
+        run: |
+          cd ffmpeg-build
+          mkdir -p package
+
+          # Flat structure: binary + all .so files in same directory
+          cp bin/ffmpeg package/
+          cp bin/ffprobe package/
+
+          echo "=== Copying FFmpeg shared libraries ==="
+          cp -P lib/*.so* package/
+
+          echo "=== Package contents ==="
+          ls -lh package/
+
+          # Set rpath so binaries find libraries in the same directory
+          patchelf --set-rpath '$ORIGIN' package/ffmpeg
+          patchelf --set-rpath '$ORIGIN' package/ffprobe
+
+          cd package
+          tar czf "../../ffmpeg-linux-x64.tar.gz" .
+
+      - name: Verify LGPL compliance
+        run: |
+          cd ffmpeg-build
+          echo "=== Checking FFmpeg configuration ==="
+          export LD_LIBRARY_PATH=$PWD/package:$LD_LIBRARY_PATH
+          if package/ffmpeg -version 2>&1 | grep -qi "enable-gpl"; then
+            echo "ERROR: GPL is enabled! This build is not LGPL-compliant."
+            exit 1
+          fi
+          echo "LGPL compliance check passed"
+          package/ffmpeg -version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-linux-x64
+          path: ffmpeg-linux-x64.tar.gz
+          retention-days: 30
+
+  create-release:
+    needs: [prepare, build-source-tarball, build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -R artifacts
+
+      - name: Create versioned release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare.outputs.release-tag }}
+          name: FFmpeg ${{ needs.prepare.outputs.version }} (LGPL)
+          body: |
+            FFmpeg ${{ needs.prepare.outputs.version }} built for ConvertSave (LGPL-only, no GPL codecs)
+
+            ## License
+            This build is **LGPL 2.1+** only. No `--enable-gpl` or `--enable-nonfree` flags were used.
+            Dynamic linking is used on all platforms (`--enable-shared --disable-static`).
+
+            ## Binaries
+            - `ffmpeg-macos-arm64.zip` - macOS Apple Silicon (ARM64)
+            - `ffmpeg-macos-x86_64.zip` - macOS Intel (x86_64)
+            - `ffmpeg-windows-x64.zip` - Windows (x86_64)
+            - `ffmpeg-linux-x64.tar.gz` - Linux (x86_64)
+
+            ## Source Code
+            - `ffmpeg-${{ needs.prepare.outputs.version }}-source.tar.gz` - Complete FFmpeg source used for this build
+            - Includes `BUILD_CONFIG.txt` with exact configure lines
+            - Includes `changes.diff` (empty = unmodified source)
+
+            Source: https://github.com/FFmpeg/FFmpeg/tree/${{ needs.prepare.outputs.version }}
+          files: |
+            artifacts/ffmpeg-macos-arm64/*.zip
+            artifacts/ffmpeg-macos-x86_64/*.zip
+            artifacts/ffmpeg-windows-x64/*.zip
+            artifacts/ffmpeg-linux-x64/*.tar.gz
+            artifacts/ffmpeg-source/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update 'latest' FFmpeg release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ffmpeg-latest
+          name: Latest FFmpeg Build (LGPL)
+          body: |
+            Latest FFmpeg build for ConvertSave (${{ needs.prepare.outputs.version }}, LGPL-only)
+
+            This release is automatically updated with the latest build.
+
+            ## License
+            LGPL 2.1+ only. No GPL or non-free codecs enabled.
+            Uses dynamic linking on all platforms.
+
+            ## Files
+            - `ffmpeg-macos-arm64.zip` - macOS Apple Silicon
+            - `ffmpeg-macos-x86_64.zip` - macOS Intel
+            - `ffmpeg-windows-x64.zip` - Windows x64
+            - `ffmpeg-linux-x64.tar.gz` - Linux x64
+            - `ffmpeg-${{ needs.prepare.outputs.version }}-source.tar.gz` - Source code
+
+            ## Build Configuration
+            See `BUILD_CONFIG.txt` in the source tarball for exact configure flags.
+
+            Source: https://github.com/FFmpeg/FFmpeg/tree/${{ needs.prepare.outputs.version }}
+          files: |
+            artifacts/ffmpeg-macos-arm64/*.zip
+            artifacts/ffmpeg-macos-x86_64/*.zip
+            artifacts/ffmpeg-windows-x64/*.zip
+            artifacts/ffmpeg-linux-x64/*.tar.gz
+            artifacts/ffmpeg-source/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

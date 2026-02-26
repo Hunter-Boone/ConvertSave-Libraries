@@ -1,0 +1,93 @@
+FFmpeg Build Configuration for ConvertSave
+===========================================
+
+This document describes how FFmpeg is compiled for distribution with ConvertSave.
+All builds use LGPL-only configuration (no --enable-gpl, no --enable-nonfree).
+Dynamic linking is used on all platforms (--enable-shared --disable-static).
+
+Source: https://github.com/FFmpeg/FFmpeg
+License: LGPLv2.1+
+
+
+macOS (x86_64 and arm64)
+------------------------
+
+./configure \
+    --disable-static \
+    --enable-shared \
+    --enable-version3 \
+    --enable-videotoolbox \
+    --enable-avfoundation \
+    --enable-audiotoolbox \
+    --enable-libvpx \
+    --enable-libaom \
+    --enable-librav1e \
+    --enable-libwebp \
+    --enable-libopus \
+    --enable-libvorbis \
+    --enable-libmp3lame \
+    --enable-libwavpack \
+    --enable-libzimg \
+    --enable-libxml2 \
+    --enable-zlib \
+    --enable-lzma
+
+Dependencies (installed via Homebrew):
+  libvpx, libaom, rav1e, webp, opus, libvorbis, lame, wavpack, zimg, libxml2
+
+
+Windows (x86_64)
+----------------
+
+./configure \
+    --disable-static \
+    --enable-shared \
+    --enable-version3 \
+    --enable-mediafoundation \
+    --enable-libvpx \
+    --enable-libaom \
+    --enable-libwebp \
+    --enable-libopus \
+    --enable-libvorbis \
+    --enable-libmp3lame \
+    --enable-libwavpack \
+    --enable-libzimg \
+    --enable-zlib
+
+Dependencies (installed via MSYS2 pacman):
+  mingw-w64-x86_64-libvpx, mingw-w64-x86_64-aom,
+  mingw-w64-x86_64-libwebp, mingw-w64-x86_64-opus,
+  mingw-w64-x86_64-libvorbis, mingw-w64-x86_64-lame,
+  mingw-w64-x86_64-wavpack, mingw-w64-x86_64-zimg
+
+
+Linux (x86_64)
+--------------
+
+./configure \
+    --disable-static \
+    --enable-shared \
+    --enable-version3 \
+    --enable-libvpx \
+    --enable-libaom \
+    --enable-libwebp \
+    --enable-libopus \
+    --enable-libvorbis \
+    --enable-libmp3lame \
+    --enable-libwavpack \
+    --enable-libzimg \
+    --enable-zlib \
+    --enable-lzma
+
+Dependencies (installed via apt):
+  libvpx-dev, libaom-dev, libwebp-dev, libopus-dev,
+  libvorbis-dev, libmp3lame-dev, libwavpack-dev,
+  libzimg-dev, zlib1g-dev, liblzma-dev, nasm
+
+
+Explicitly NOT enabled (GPL/non-free):
+  --enable-gpl
+  --enable-nonfree
+  --enable-libx264
+  --enable-libx265
+  --enable-libfdk-aac
