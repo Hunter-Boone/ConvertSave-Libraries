@@ -105,7 +105,6 @@ jobs:
           BREW_PREFIX="$(brew --prefix)"
           echo "Homebrew prefix: $BREW_PREFIX"
 
-          # Build PKG_CONFIG_PATH from all installed Homebrew packages
           PKG_CONFIG_DIRS="${BREW_PREFIX}/lib/pkgconfig:${BREW_PREFIX}/share/pkgconfig"
           for pkg in lame libvpx aom rav1e webp opus libvorbis zimg libxml2; do
             pkg_dir="${BREW_PREFIX}/opt/${pkg}/lib/pkgconfig"
@@ -121,8 +120,9 @@ jobs:
 
           ./configure \
             --prefix=$PWD/../ffmpeg-build \
-            --disable-static \
-            --enable-shared \
+            --enable-static \
+            --disable-shared \
+            --pkg-config-flags="--static" \
             --enable-version3 \
             --enable-videotoolbox \
             --enable-avfoundation \
@@ -159,84 +159,13 @@ jobs:
           cd ffmpeg-build
           mkdir -p package
 
-          # Flat structure: binary + all dylibs in same directory
           cp bin/ffmpeg package/
           cp bin/ffprobe package/
 
-          echo "=== Copying FFmpeg shared libraries ==="
-          cp lib/*.dylib package/
+          echo "=== Package contents ==="
+          ls -lh package/
 
-          BREW_PREFIX="$(brew --prefix)"
-
-          # Recursively copy all non-system dylib dependencies
-          copy_deps() {
-            local binary="$1"
-            local level="${2:-0}"
-            local indent=$(printf '%*s' $((level * 2)) '')
-
-            otool -L "$binary" 2>/dev/null | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
-              local dep_name=$(basename "$dep")
-              local dest="package/$dep_name"
-
-              if [ ! -f "$dest" ]; then
-                if [ -f "$dep" ]; then
-                  echo "${indent}  Copying: $dep_name"
-                  cp "$dep" "$dest"
-                  copy_deps "$dest" $((level + 1))
-                elif [ -f "$BREW_PREFIX/lib/$dep_name" ]; then
-                  echo "${indent}  Copying: $dep_name (from Homebrew)"
-                  cp "$BREW_PREFIX/lib/$dep_name" "$dest"
-                  copy_deps "$dest" $((level + 1))
-                else
-                  local found_path=$(find "$BREW_PREFIX/Cellar" -name "$dep_name" 2>/dev/null | head -1)
-                  if [ -n "$found_path" ] && [ -f "$found_path" ]; then
-                    echo "${indent}  Copying: $dep_name (from Cellar)"
-                    cp "$found_path" "$dest"
-                    copy_deps "$dest" $((level + 1))
-                  else
-                    echo "${indent}  WARNING: Not found: $dep_name"
-                  fi
-                fi
-              fi
-            done
-          }
-
-          echo "=== Resolving dependencies for ffmpeg ==="
-          copy_deps "package/ffmpeg" 0
-          echo "=== Resolving dependencies for ffprobe ==="
-          copy_deps "package/ffprobe" 0
-
-          echo "=== Resolving dependencies for libraries (multiple passes) ==="
-          for pass in 1 2 3; do
-            echo "Pass $pass..."
-            for dylib in package/*.dylib; do
-              [ -f "$dylib" ] && copy_deps "$dylib" 0
-            done
-          done
-
-          echo "=== Bundled libraries ==="
-          ls -lh package/*.dylib
-
-          # Fix library paths: use @loader_path so libs find each other in the same directory
-          # Must catch both absolute paths (/opt/homebrew/...) AND @rpath/ references
-          echo "=== Fixing library paths ==="
-          for dylib in package/*.dylib; do
-            if [ -f "$dylib" ]; then
-              install_name_tool -id "@loader_path/$(basename $dylib)" "$dylib"
-              otool -L "$dylib" | awk '/.dylib/ {print $1}' | grep -v '/usr/lib' | grep -v '/System' | grep -v '@loader_path' | while read dep; do
-                install_name_tool -change "$dep" "@loader_path/$(basename $dep)" "$dylib" 2>/dev/null || true
-              done
-            fi
-          done
-
-          # Fix binaries: use @executable_path so they find dylibs in the same directory
-          for bin in package/ffmpeg package/ffprobe; do
-            otool -L "$bin" | awk '/.dylib/ {print $1}' | grep -v '/usr/lib' | grep -v '/System' | grep -v '@executable_path' | while read dep; do
-              install_name_tool -change "$dep" "@executable_path/$(basename $dep)" "$bin" 2>/dev/null || true
-            done
-          done
-
-          echo "=== Verifying ffmpeg binary ==="
+          echo "=== Verifying no dynamic library dependencies (except system) ==="
           otool -L package/ffmpeg
 
           cd package
@@ -303,8 +232,9 @@ jobs:
 
           ./configure \
             --prefix=$PWD/../ffmpeg-build \
-            --disable-static \
-            --enable-shared \
+            --enable-static \
+            --disable-shared \
+            --pkg-config-flags="--static" \
             --enable-version3 \
             --enable-mediafoundation \
             --enable-libvpx \
@@ -314,7 +244,8 @@ jobs:
             --enable-libvorbis \
             --enable-libmp3lame \
             --enable-libzimg \
-            --enable-zlib
+            --enable-zlib \
+            --extra-ldflags="-static"
 
       - name: Build FFmpeg
         run: |
@@ -333,56 +264,6 @@ jobs:
 
           cp bin/ffmpeg.exe package/
           cp bin/ffprobe.exe package/
-
-          # Copy FFmpeg DLLs
-          echo "=== Copying FFmpeg DLLs ==="
-          cp bin/*.dll package/ 2>/dev/null || true
-
-          # Copy dependency DLLs from MinGW
-          echo "=== Resolving DLL dependencies ==="
-          MINGW_BIN="/mingw64/bin"
-
-          copy_dll_deps() {
-            local binary="$1"
-            objdump -p "$binary" 2>/dev/null | grep "DLL Name:" | awk '{print $3}' | while read dll; do
-              local dest="package/$dll"
-              if [ ! -f "$dest" ]; then
-                if [ -f "$MINGW_BIN/$dll" ]; then
-                  # Skip Windows system DLLs
-                  case "$dll" in
-                    KERNEL32.dll|kernel32.dll|ADVAPI32.dll|advapi32.dll|USER32.dll|user32.dll|\
-                    GDI32.dll|gdi32.dll|SHELL32.dll|shell32.dll|ole32.dll|OLE32.dll|\
-                    OLEAUT32.dll|oleaut32.dll|COMCTL32.dll|comctl32.dll|COMDLG32.dll|\
-                    WS2_32.dll|ws2_32.dll|WSOCK32.dll|wsock32.dll|IMM32.dll|imm32.dll|\
-                    WINMM.dll|winmm.dll|VERSION.dll|version.dll|SHLWAPI.dll|shlwapi.dll|\
-                    SETUPAPI.dll|setupapi.dll|msvcrt.dll|MSVCRT.dll|ntdll.dll|NTDLL.dll|\
-                    bcrypt.dll|BCRYPT.dll|CRYPT32.dll|crypt32.dll|Secur32.dll|SECUR32.dll|\
-                    MFPLAT.DLL|mfplat.dll|MFReadWrite.dll|api-ms-*|ext-ms-*|d3d*.dll|dxgi*.dll|\
-                    ucrtbase.dll|UCRTBASE.dll|VCRUNTIME*.dll|msvcp*.dll)
-                      ;;
-                    *)
-                      echo "  Copying: $dll"
-                      cp "$MINGW_BIN/$dll" "$dest"
-                      copy_dll_deps "$dest"
-                      ;;
-                  esac
-                fi
-              fi
-            done
-          }
-
-          for exe in package/ffmpeg.exe package/ffprobe.exe; do
-            echo "=== Dependencies for $(basename $exe) ==="
-            copy_dll_deps "$exe"
-          done
-
-          # Multiple passes for transitive deps
-          for pass in 1 2 3; do
-            echo "=== DLL dependency pass $pass ==="
-            for dll in package/*.dll; do
-              [ -f "$dll" ] && copy_dll_deps "$dll"
-            done
-          done
 
           echo "=== Package contents ==="
           ls -lh package/
@@ -448,8 +329,9 @@ jobs:
 
           ./configure \
             --prefix=$PWD/../ffmpeg-build \
-            --disable-static \
-            --enable-shared \
+            --enable-static \
+            --disable-shared \
+            --pkg-config-flags="--static" \
             --enable-version3 \
             --enable-libvpx \
             --enable-libaom \
@@ -459,7 +341,8 @@ jobs:
             --enable-libmp3lame \
             --enable-libzimg \
             --enable-zlib \
-            --enable-lzma
+            --enable-lzma \
+            --extra-ldflags="-static"
 
       - name: Build FFmpeg
         run: |
@@ -471,27 +354,16 @@ jobs:
           cd ffmpeg-src
           make install
 
-      - name: Install patchelf
-        run: sudo apt-get install -y patchelf
-
       - name: Package FFmpeg
         run: |
           cd ffmpeg-build
           mkdir -p package
 
-          # Flat structure: binary + all .so files in same directory
           cp bin/ffmpeg package/
           cp bin/ffprobe package/
 
-          echo "=== Copying FFmpeg shared libraries ==="
-          cp -P lib/*.so* package/
-
           echo "=== Package contents ==="
           ls -lh package/
-
-          # Set rpath so binaries find libraries in the same directory
-          patchelf --set-rpath '$ORIGIN' package/ffmpeg
-          patchelf --set-rpath '$ORIGIN' package/ffprobe
 
           cd package
           tar czf "../../ffmpeg-linux-x64.tar.gz" .
@@ -500,7 +372,6 @@ jobs:
         run: |
           cd ffmpeg-build
           echo "=== Checking FFmpeg configuration ==="
-          export LD_LIBRARY_PATH=$PWD/package:$LD_LIBRARY_PATH
           if package/ffmpeg -version 2>&1 | grep -qi "enable-gpl"; then
             echo "ERROR: GPL is enabled! This build is not LGPL-compliant."
             exit 1
@@ -537,7 +408,8 @@ jobs:
 
             ## License
             This build is **LGPL 2.1+** only. No `--enable-gpl` or `--enable-nonfree` flags were used.
-            Dynamic linking is used on all platforms (`--enable-shared --disable-static`).
+            All dependencies are statically linked into the binary. ConvertSave uses FFmpeg as a
+            standalone CLI tool (not linked as a library), so static linking is LGPL-compliant.
 
             ## Binaries
             - `ffmpeg-macos-arm64.zip` - macOS Apple Silicon (ARM64)
@@ -574,7 +446,7 @@ jobs:
 
             ## License
             LGPL 2.1+ only. No GPL or non-free codecs enabled.
-            Uses dynamic linking on all platforms.
+            Statically linked — each archive contains only the ffmpeg and ffprobe binaries.
 
             ## Files
             - `ffmpeg-macos-arm64.zip` - macOS Apple Silicon

@@ -3,7 +3,12 @@ FFmpeg Build Configuration for ConvertSave
 
 This document describes how FFmpeg is compiled for distribution with ConvertSave.
 All builds use LGPL-only configuration (no --enable-gpl, no --enable-nonfree).
-Dynamic linking is used on all platforms (--enable-shared --disable-static).
+Static linking is used on all platforms (--enable-static --disable-shared).
+
+ConvertSave invokes FFmpeg as a standalone CLI process, not by linking against
+FFmpeg's libraries. The LGPL dynamic-linking requirement applies only when LGPL
+code is embedded into a proprietary binary. Since ConvertSave does not link to
+FFmpeg libraries, distributing a statically-linked FFmpeg binary is compliant.
 
 Source: https://github.com/FFmpeg/FFmpeg
 License: LGPLv2.1+
@@ -16,8 +21,9 @@ macOS (x86_64 and arm64)
 ------------------------
 
 ./configure \
-    --disable-static \
-    --enable-shared \
+    --enable-static \
+    --disable-shared \
+    --pkg-config-flags="--static" \
     --enable-version3 \
     --enable-videotoolbox \
     --enable-avfoundation \
@@ -42,8 +48,9 @@ Windows (x86_64)
 ----------------
 
 ./configure \
-    --disable-static \
-    --enable-shared \
+    --enable-static \
+    --disable-shared \
+    --pkg-config-flags="--static" \
     --enable-version3 \
     --enable-mediafoundation \
     --enable-libvpx \
@@ -53,7 +60,8 @@ Windows (x86_64)
     --enable-libvorbis \
     --enable-libmp3lame \
     --enable-libzimg \
-    --enable-zlib
+    --enable-zlib \
+    --extra-ldflags="-static"
 
 Dependencies (installed via MSYS2 pacman):
   mingw-w64-x86_64-libvpx, mingw-w64-x86_64-aom,
@@ -66,8 +74,9 @@ Linux (x86_64)
 --------------
 
 ./configure \
-    --disable-static \
-    --enable-shared \
+    --enable-static \
+    --disable-shared \
+    --pkg-config-flags="--static" \
     --enable-version3 \
     --enable-libvpx \
     --enable-libaom \
@@ -77,7 +86,8 @@ Linux (x86_64)
     --enable-libmp3lame \
     --enable-libzimg \
     --enable-zlib \
-    --enable-lzma
+    --enable-lzma \
+    --extra-ldflags="-static"
 
 Dependencies (installed via apt):
   libvpx-dev, libaom-dev, libwebp-dev, libopus-dev,
