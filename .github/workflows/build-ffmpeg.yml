@@ -218,11 +218,12 @@ jobs:
           ls -lh package/*.dylib
 
           # Fix library paths: use @loader_path so libs find each other in the same directory
+          # Must catch both absolute paths (/opt/homebrew/...) AND @rpath/ references
           echo "=== Fixing library paths ==="
           for dylib in package/*.dylib; do
             if [ -f "$dylib" ]; then
               install_name_tool -id "@loader_path/$(basename $dylib)" "$dylib"
-              otool -L "$dylib" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+              otool -L "$dylib" | awk '/.dylib/ {print $1}' | grep -v '/usr/lib' | grep -v '/System' | grep -v '@loader_path' | while read dep; do
                 install_name_tool -change "$dep" "@loader_path/$(basename $dep)" "$dylib" 2>/dev/null || true
               done
             fi
@@ -230,7 +231,7 @@ jobs:
 
           # Fix binaries: use @executable_path so they find dylibs in the same directory
           for bin in package/ffmpeg package/ffprobe; do
-            otool -L "$bin" | grep -o '/.*\.dylib' | grep -v '/usr/lib' | grep -v '/System' | while read dep; do
+            otool -L "$bin" | awk '/.dylib/ {print $1}' | grep -v '/usr/lib' | grep -v '/System' | grep -v '@executable_path' | while read dep; do
               install_name_tool -change "$dep" "@executable_path/$(basename $dep)" "$bin" 2>/dev/null || true
             done
           done
