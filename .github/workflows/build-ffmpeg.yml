@@ -331,7 +331,6 @@ jobs:
             --prefix=$PWD/../ffmpeg-build \
             --enable-static \
             --disable-shared \
-            --pkg-config-flags="--static" \
             --enable-version3 \
             --enable-libvpx \
             --enable-libaom \
@@ -341,8 +340,7 @@ jobs:
             --enable-libmp3lame \
             --enable-libzimg \
             --enable-zlib \
-            --enable-lzma \
-            --extra-ldflags="-static"
+            --enable-lzma
 
       - name: Build FFmpeg
         run: |
@@ -364,6 +362,9 @@ jobs:
 
           echo "=== Package contents ==="
           ls -lh package/
+
+          echo "=== Checking dynamic dependencies ==="
+          ldd package/ffmpeg || true
 
           cd package
           tar czf "../../ffmpeg-linux-x64.tar.gz" .

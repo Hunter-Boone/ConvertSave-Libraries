@@ -76,7 +76,6 @@ Linux (x86_64)
 ./configure \
     --enable-static \
     --disable-shared \
-    --pkg-config-flags="--static" \
     --enable-version3 \
     --enable-libvpx \
     --enable-libaom \
@@ -86,8 +85,11 @@ Linux (x86_64)
     --enable-libmp3lame \
     --enable-libzimg \
     --enable-zlib \
-    --enable-lzma \
-    --extra-ldflags="-static"
+    --enable-lzma
+
+Note: Linux builds statically link FFmpeg's own libraries and codec libraries,
+but dynamically link system libraries (glibc, etc.) since fully static builds
+on Linux are problematic with glibc's NSS/DNS subsystems.
 
 Dependencies (installed via apt):
   libvpx-dev, libaom-dev, libwebp-dev, libopus-dev,
