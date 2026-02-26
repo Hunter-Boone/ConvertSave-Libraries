@@ -98,6 +98,21 @@ jobs:
           VERSION="${{ needs.prepare.outputs.version }}"
           git clone --depth 1 --branch "$VERSION" https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
 
+      - name: Hide Homebrew dylibs (force static linking)
+        run: |
+          for pkg in libvpx aom rav1e webp opus libvorbis lame zimg libxml2; do
+            pkg_lib="$(brew --prefix $pkg)/lib" 2>/dev/null || continue
+            if [ -d "$pkg_lib" ]; then
+              for dylib in "$pkg_lib"/*.dylib; do
+                if [ -f "$dylib" ]; then
+                  mv "$dylib" "${dylib}.hidden"
+                  echo "  Hidden: $(basename $dylib)"
+                fi
+              done
+            fi
+          done
+          echo "Dylibs hidden — linker will use static .a files"
+
       - name: Configure FFmpeg
         run: |
           cd ffmpeg-src
@@ -154,6 +169,21 @@ jobs:
           cd ffmpeg-src
           make install
 
+      - name: Restore Homebrew dylibs
+        if: always()
+        run: |
+          for pkg in libvpx aom rav1e webp opus libvorbis lame zimg libxml2; do
+            pkg_lib="$(brew --prefix $pkg)/lib" 2>/dev/null || continue
+            if [ -d "$pkg_lib" ]; then
+              for dylib in "$pkg_lib"/*.dylib.hidden; do
+                if [ -f "$dylib" ]; then
+                  mv "$dylib" "${dylib%.hidden}"
+                fi
+              done
+            fi
+          done
+          echo "Dylibs restored"
+
       - name: Package FFmpeg
         run: |
           cd ffmpeg-build
@@ -165,8 +195,13 @@ jobs:
           echo "=== Package contents ==="
           ls -lh package/
 
-          echo "=== Verifying no dynamic library dependencies (except system) ==="
+          echo "=== Verifying no Homebrew dynamic dependencies ==="
           otool -L package/ffmpeg
+          if otool -L package/ffmpeg | grep -q '/opt/homebrew\|/usr/local/opt'; then
+            echo "ERROR: Binary still depends on Homebrew dylibs!"
+            exit 1
+          fi
+          echo "No Homebrew dylib dependencies found — static linking confirmed"
 
           cd package
           zip -r "../../ffmpeg-macos-${{ matrix.arch }}.zip" .
