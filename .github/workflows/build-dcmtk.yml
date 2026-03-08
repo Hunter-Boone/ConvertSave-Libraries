@@ -1,0 +1,411 @@
+name: Build DCMTK
+
+on:
+  workflow_dispatch:
+    inputs:
+      dcmtk-version:
+        description: "DCMTK version tag (e.g., DCMTK-3.7.0)"
+        required: true
+        default: "DCMTK-3.7.0"
+      release-tag:
+        description: "Release tag name (e.g., dcmtk-3.7.0)"
+        required: true
+        default: "dcmtk-3.7.0"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release-tag: ${{ steps.version.outputs.release-tag }}
+    steps:
+      - name: Set version info
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.dcmtk-version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release-tag=${{ github.event.inputs.release-tag }}" >> $GITHUB_OUTPUT
+          echo "Building DCMTK $VERSION"
+
+      - name: Verify tag exists on DCMTK repo
+        run: |
+          VERSION="${{ github.event.inputs.dcmtk-version }}"
+          git ls-remote --tags https://github.com/DCMTK/dcmtk.git "refs/tags/$VERSION" | grep -q "$VERSION" || {
+            echo "ERROR: Tag $VERSION not found in DCMTK repository"
+            echo "Browse available tags: https://github.com/DCMTK/dcmtk/tags"
+            exit 1
+          }
+          echo "Tag $VERSION exists"
+
+  build-macos:
+    needs: prepare
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }}
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Install dependencies
+        run: |
+          brew install cmake libtiff libpng openjpeg libxml2
+
+      - name: Clone DCMTK source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch "$VERSION" https://github.com/DCMTK/dcmtk.git dcmtk-src
+          cd dcmtk-src
+          echo "Cloned DCMTK at tag $VERSION"
+          echo "Commit: $(git rev-parse HEAD)"
+
+      - name: Hide Homebrew dylibs (force static linking)
+        run: |
+          DIRECT_DEPS="libtiff libpng openjpeg libxml2"
+
+          ALL_PKGS=""
+          for pkg in $DIRECT_DEPS; do
+            ALL_PKGS="$ALL_PKGS $pkg"
+            deps=$(brew deps $pkg 2>/dev/null || true)
+            ALL_PKGS="$ALL_PKGS $deps"
+          done
+          ALL_PKGS=$(echo "$ALL_PKGS" | tr ' ' '\n' | sort -u | grep -v '^$')
+
+          echo "Packages to hide dylibs for:"
+          echo "$ALL_PKGS"
+
+          for pkg in $ALL_PKGS; do
+            pkg_lib="$(brew --prefix $pkg 2>/dev/null)/lib" || continue
+            if [ -d "$pkg_lib" ]; then
+              for dylib in "$pkg_lib"/*.dylib; do
+                if [ -f "$dylib" ]; then
+                  mv "$dylib" "${dylib}.hidden"
+                  echo "  Hidden: $pkg — $(basename $dylib)"
+                fi
+              done
+            fi
+          done
+          echo "Done — dylibs hidden, linker will use static .a files"
+
+      - name: Configure DCMTK
+        run: |
+          BREW_PREFIX="$(brew --prefix)"
+          export MACOSX_DEPLOYMENT_TARGET=11.0
+
+          cmake -B build -S dcmtk-src \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_APPS=ON \
+            -DDCMTK_WITH_OPENSSL=OFF \
+            -DDCMTK_WITH_WRAP=OFF \
+            -DDCMTK_WITH_SNDFILE=OFF \
+            -DDCMTK_WITH_ZLIB=ON \
+            -DDCMTK_WITH_TIFF=ON \
+            -DDCMTK_WITH_PNG=ON \
+            -DDCMTK_WITH_XML=ON \
+            -DDCMTK_WITH_OPENJPEG=ON \
+            -DDCMTK_WITH_ICONV=ON \
+            -DDCMTK_ENABLE_BUILTIN_OFICONV_DATA=ON \
+            -DDCMTK_ENABLE_STL=ON \
+            -DDCMTK_DEFAULT_DICT=builtin \
+            -DCMAKE_PREFIX_PATH="$BREW_PREFIX" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DCMAKE_INSTALL_PREFIX=$PWD/install
+
+      - name: Build DCMTK
+        run: cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+
+      - name: Install DCMTK
+        run: cmake --install build
+
+      - name: Restore Homebrew dylibs
+        if: always()
+        run: |
+          DIRECT_DEPS="libtiff libpng openjpeg libxml2"
+          ALL_PKGS=""
+          for pkg in $DIRECT_DEPS; do
+            ALL_PKGS="$ALL_PKGS $pkg"
+            deps=$(brew deps $pkg 2>/dev/null || true)
+            ALL_PKGS="$ALL_PKGS $deps"
+          done
+          ALL_PKGS=$(echo "$ALL_PKGS" | tr ' ' '\n' | sort -u | grep -v '^$')
+
+          for pkg in $ALL_PKGS; do
+            pkg_lib="$(brew --prefix $pkg 2>/dev/null)/lib" || continue
+            if [ -d "$pkg_lib" ]; then
+              for dylib in "$pkg_lib"/*.dylib.hidden; do
+                if [ -f "$dylib" ]; then
+                  mv "$dylib" "${dylib%.hidden}"
+                fi
+              done
+            fi
+          done
+          echo "Dylibs restored"
+
+      - name: Verify build
+        run: |
+          echo "=== Installed binaries ==="
+          ls -la install/bin/
+
+          echo ""
+          echo "=== DCMTK version ==="
+          install/bin/dcmdump --version || true
+
+          echo ""
+          echo "=== Checking dynamic dependencies ==="
+          otool -L install/bin/dcmdump
+          if otool -L install/bin/dcmdump | grep -q '/opt/homebrew\|/usr/local/opt'; then
+            echo "WARNING: Binary depends on Homebrew dylibs"
+          else
+            echo "No Homebrew dylib dependencies found"
+          fi
+
+      - name: Package DCMTK
+        run: |
+          cd install/bin
+          zip -r "../../dcmtk-macos-${{ matrix.arch }}.zip" .
+          cd ../..
+          echo "=== Package created ==="
+          ls -lh dcmtk-macos-${{ matrix.arch }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcmtk-macos-${{ matrix.arch }}
+          path: dcmtk-macos-${{ matrix.arch }}.zip
+          retention-days: 30
+
+  build-windows:
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - name: Install dependencies via vcpkg
+        shell: pwsh
+        run: |
+          vcpkg install zlib:x64-windows-static tiff:x64-windows-static libpng:x64-windows-static openjpeg:x64-windows-static libxml2:x64-windows-static
+
+      - name: Clone DCMTK source
+        shell: pwsh
+        run: |
+          $VERSION = "${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch $VERSION https://github.com/DCMTK/dcmtk.git dcmtk-src
+          Set-Location dcmtk-src
+          Write-Host "Cloned DCMTK at tag $VERSION"
+          Write-Host "Commit: $(git rev-parse HEAD)"
+
+      - name: Configure DCMTK
+        shell: pwsh
+        run: |
+          cmake -B build -S dcmtk-src `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DBUILD_APPS=ON `
+            -DDCMTK_WITH_OPENSSL=OFF `
+            -DDCMTK_WITH_WRAP=OFF `
+            -DDCMTK_WITH_SNDFILE=OFF `
+            -DDCMTK_WITH_ZLIB=ON `
+            -DDCMTK_WITH_TIFF=ON `
+            -DDCMTK_WITH_PNG=ON `
+            -DDCMTK_WITH_XML=ON `
+            -DDCMTK_WITH_OPENJPEG=ON `
+            -DDCMTK_WITH_ICONV=ON `
+            -DDCMTK_ENABLE_BUILTIN_OFICONV_DATA=ON `
+            -DDCMTK_ENABLE_STL=ON `
+            -DDCMTK_DEFAULT_DICT=builtin `
+            -DDCMTK_COMPILE_WIN32_MULTITHREADED_DLL=OFF `
+            -DCMAKE_INSTALL_PREFIX=install
+
+      - name: Build DCMTK
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Install DCMTK
+        shell: pwsh
+        run: cmake --install build --config Release
+
+      - name: Verify build
+        shell: pwsh
+        run: |
+          Write-Host "=== Installed binaries ==="
+          Get-ChildItem install/bin/*.exe | Format-Table Name, Length
+
+          Write-Host ""
+          Write-Host "=== DCMTK version ==="
+          & install/bin/dcmdump.exe --version
+
+      - name: Create zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path install/bin/* -DestinationPath dcmtk-windows-x64.zip
+          Write-Host "Created dcmtk-windows-x64.zip"
+          Get-Item dcmtk-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcmtk-windows-x64
+          path: dcmtk-windows-x64.zip
+          retention-days: 30
+
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            zlib1g-dev \
+            libtiff-dev \
+            libpng-dev \
+            libxml2-dev \
+            libopenjp2-7-dev
+
+      - name: Clone DCMTK source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch "$VERSION" https://github.com/DCMTK/dcmtk.git dcmtk-src
+          cd dcmtk-src
+          echo "Cloned DCMTK at tag $VERSION"
+          echo "Commit: $(git rev-parse HEAD)"
+
+      - name: Configure DCMTK
+        run: |
+          cmake -B build -S dcmtk-src \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_APPS=ON \
+            -DDCMTK_WITH_OPENSSL=OFF \
+            -DDCMTK_WITH_WRAP=OFF \
+            -DDCMTK_WITH_SNDFILE=OFF \
+            -DDCMTK_WITH_ZLIB=ON \
+            -DDCMTK_WITH_TIFF=ON \
+            -DDCMTK_WITH_PNG=ON \
+            -DDCMTK_WITH_XML=ON \
+            -DDCMTK_WITH_OPENJPEG=ON \
+            -DDCMTK_WITH_ICONV=ON \
+            -DDCMTK_ENABLE_BUILTIN_OFICONV_DATA=ON \
+            -DDCMTK_ENABLE_STL=ON \
+            -DDCMTK_DEFAULT_DICT=builtin \
+            -DCMAKE_INSTALL_PREFIX=$PWD/install
+
+      - name: Build DCMTK
+        run: cmake --build build --config Release -j$(nproc)
+
+      - name: Install DCMTK
+        run: cmake --install build
+
+      - name: Verify build
+        run: |
+          echo "=== Installed binaries ==="
+          ls -la install/bin/
+
+          echo ""
+          echo "=== DCMTK version ==="
+          install/bin/dcmdump --version || true
+
+          echo ""
+          echo "=== Checking dynamic dependencies ==="
+          ldd install/bin/dcmdump || true
+
+      - name: Package DCMTK
+        run: |
+          cd install/bin
+          tar czf "../../dcmtk-linux-x64.tar.gz" .
+          cd ../..
+          echo "=== Package created ==="
+          ls -lh dcmtk-linux-x64.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcmtk-linux-x64
+          path: dcmtk-linux-x64.tar.gz
+          retention-days: 30
+
+  create-release:
+    needs: [prepare, build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -R artifacts
+
+      - name: Create versioned release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.prepare.outputs.release-tag }}
+          name: DCMTK ${{ needs.prepare.outputs.version }}
+          body: |
+            DCMTK ${{ needs.prepare.outputs.version }} built for ConvertSave
+
+            ## License
+            DCMTK is released under a [BSD-style license](https://github.com/DCMTK/dcmtk/blob/master/COPYRIGHT).
+
+            ## Build Configuration
+            - Static libraries (`BUILD_SHARED_LIBS=OFF`)
+            - All command-line tools included
+            - No OpenSSL/TLS support
+            - Built-in DICOM data dictionary
+            - Image format support: TIFF, PNG, JPEG 2000 (OpenJPEG), XML (libxml2)
+            - Built-in character set conversion (oficonv)
+
+            ## Binaries
+            - `dcmtk-macos-arm64.zip` — macOS Apple Silicon (ARM64)
+            - `dcmtk-macos-x86_64.zip` — macOS Intel (x86_64)
+            - `dcmtk-windows-x64.zip` — Windows (x86_64)
+            - `dcmtk-linux-x64.tar.gz` — Linux (x86_64)
+
+            Source: https://github.com/DCMTK/dcmtk/tree/${{ needs.prepare.outputs.version }}
+          files: |
+            artifacts/dcmtk-macos-arm64/*.zip
+            artifacts/dcmtk-macos-x86_64/*.zip
+            artifacts/dcmtk-windows-x64/*.zip
+            artifacts/dcmtk-linux-x64/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update 'dcmtk-latest' release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: dcmtk-latest
+          name: Latest DCMTK Build
+          body: |
+            Latest DCMTK build for ConvertSave (${{ needs.prepare.outputs.version }})
+
+            This release is automatically updated with the latest build.
+
+            ## License
+            BSD-style license. See [COPYRIGHT](https://github.com/DCMTK/dcmtk/blob/master/COPYRIGHT).
+
+            ## Files
+            - `dcmtk-macos-arm64.zip` — macOS Apple Silicon
+            - `dcmtk-macos-x86_64.zip` — macOS Intel
+            - `dcmtk-windows-x64.zip` — Windows x64
+            - `dcmtk-linux-x64.tar.gz` — Linux x64
+
+            ## Build Info
+            - Static build, all CLI tools, no TLS
+            - Built-in DICOM dictionary and character set data
+            - Image formats: TIFF, PNG, JPEG 2000, XML
+
+            Source: https://github.com/DCMTK/dcmtk/tree/${{ needs.prepare.outputs.version }}
+          files: |
+            artifacts/dcmtk-macos-arm64/*.zip
+            artifacts/dcmtk-macos-x86_64/*.zip
+            artifacts/dcmtk-windows-x64/*.zip
+            artifacts/dcmtk-linux-x64/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -28,6 +28,16 @@ ConvertSave bundles conversion tools to work offline. This repository builds tho
 - **Source tarball**: Uploaded alongside binaries in each release for LGPL compliance
 - **Build config**: See `ffmpeg/BUILD_CONFIG.txt` for exact configure flags
 
+### DCMTK
+
+- **Platforms**: macOS (Intel + Apple Silicon), Windows, Linux
+- **License**: BSD-style license
+- **Linking**: Static (`BUILD_SHARED_LIBS=OFF`)
+- **Source**: Built from [DCMTK's official repository](https://github.com/DCMTK/dcmtk)
+- **Features**: All CLI tools, built-in DICOM dictionary, TIFF/PNG/JPEG2000/XML support
+- **No TLS**: Built without OpenSSL (`DCMTK_WITH_OPENSSL=OFF`)
+- **Workflow**: `.github/workflows/build-dcmtk.yml`
+
 ## Building
 
 ### ImageMagick
@@ -46,6 +56,14 @@ ImageMagick runs monthly to check for updates automatically.
 2. Click **Run workflow**
 3. Enter FFmpeg version tag (e.g., `n7.1`)
 4. Enter release tag (e.g., `ffmpeg-7.1`)
+5. Download built artifacts from **Releases**
+
+### DCMTK
+
+1. Go to **Actions** → **Build DCMTK**
+2. Click **Run workflow**
+3. Enter DCMTK version tag (e.g., `DCMTK-3.7.0`)
+4. Enter release tag (e.g., `dcmtk-3.7.0`)
 5. Download built artifacts from **Releases**
 
 ## Using the Builds
@@ -67,9 +85,18 @@ https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/ffmpeg-l
 https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/ffmpeg-latest/ffmpeg-linux-x64.tar.gz
 ```
 
+### DCMTK "dcmtk-latest" Release
+
+```
+https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/dcmtk-latest/dcmtk-macos-arm64.zip
+https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/dcmtk-latest/dcmtk-macos-x86_64.zip
+https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/dcmtk-latest/dcmtk-windows-x64.zip
+https://github.com/Hunter-Boone/ConvertSave-Libraries/releases/download/dcmtk-latest/dcmtk-linux-x64.tar.gz
+```
+
 ### Versioned Releases
 
-Browse [Releases](../../releases) for specific versions of both ImageMagick and FFmpeg.
+Browse [Releases](../../releases) for specific versions of ImageMagick, FFmpeg, and DCMTK.
 
 ### Windows ImageMagick
 
@@ -88,3 +115,4 @@ Build scripts are provided as-is. Built binaries follow their respective license
 
 - **ImageMagick**: Apache 2.0
 - **FFmpeg**: LGPLv2.1+ (built without GPL codecs)
+- **DCMTK**: BSD-style license
