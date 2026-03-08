@@ -87,6 +87,25 @@ jobs:
           done
           echo "Done — dylibs hidden, linker will use static .a files"
 
+          # Patch OpenJPEG CMake config to reference static library
+          # OpenJPEG's config uses imported targets with hardcoded dylib paths,
+          # unlike TIFF/PNG/ZLIB/XML which use CMake's built-in Find modules.
+          OPENJPEG_PREFIX="$(brew --prefix openjpeg)"
+          if [ -d "$OPENJPEG_PREFIX/lib/cmake" ]; then
+            echo "Patching OpenJPEG CMake config for static linking..."
+            find "$OPENJPEG_PREFIX/lib/cmake" -name "OpenJPEGTargets.cmake" | while read f; do
+              cp "$f" "${f}.bak"
+              sed -i '' 's/SHARED IMPORTED/STATIC IMPORTED/g' "$f"
+              echo "  Patched: $(basename $f) (SHARED -> STATIC)"
+            done
+            find "$OPENJPEG_PREFIX/lib/cmake" -name "OpenJPEGTargets-release.cmake" | while read f; do
+              cp "$f" "${f}.bak"
+              sed -i '' 's/libopenjp2\.[0-9.]*\.dylib/libopenjp2.a/g' "$f"
+              sed -i '' '/IMPORTED_SONAME/d' "$f"
+              echo "  Patched: $(basename $f) (dylib -> .a)"
+            done
+          fi
+
       - name: Configure DCMTK
         run: |
           BREW_PREFIX="$(brew --prefix)"
@@ -141,6 +160,15 @@ jobs:
             fi
           done
           echo "Dylibs restored"
+
+          # Restore OpenJPEG CMake configs
+          OPENJPEG_PREFIX="$(brew --prefix openjpeg 2>/dev/null)" || true
+          if [ -d "$OPENJPEG_PREFIX/lib/cmake" ]; then
+            find "$OPENJPEG_PREFIX/lib/cmake" -name "*.bak" | while read f; do
+              mv "$f" "${f%.bak}"
+            done
+            echo "OpenJPEG CMake configs restored"
+          fi
 
       - name: Verify build
         run: |
