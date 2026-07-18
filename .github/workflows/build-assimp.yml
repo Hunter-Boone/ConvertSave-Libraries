@@ -1,0 +1,173 @@
+name: Build Assimp
+
+on:
+  workflow_dispatch:
+    inputs:
+      assimp-version:
+        description: "Assimp version tag (e.g., v6.0.2)"
+        required: true
+        default: "v6.0.2"
+      release-tag:
+        description: "Release tag name (e.g., assimp-6.0.2)"
+        required: true
+        default: "assimp-6.0.2"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release-tag: ${{ steps.version.outputs.release-tag }}
+    steps:
+      - name: Set version info
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.assimp-version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release-tag=${{ github.event.inputs.release-tag }}" >> $GITHUB_OUTPUT
+          echo "Building Assimp $VERSION"
+
+      - name: Verify tag exists on Assimp repo
+        run: |
+          VERSION="${{ github.event.inputs.assimp-version }}"
+          git ls-remote --tags https://github.com/assimp/assimp.git "refs/tags/$VERSION" | grep -q "$VERSION" || {
+            echo "ERROR: Tag $VERSION not found in the Assimp repository"
+            echo "Browse available tags: https://github.com/assimp/assimp/tags"
+            exit 1
+          }
+          echo "Tag $VERSION exists"
+
+  # Static single-binary build of the assimp CLI (BSD-3-Clause).
+  # Flags mirror the configuration verified against the ConvertSave app.
+  build-windows:
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - name: Clone Assimp source
+        shell: pwsh
+        run: |
+          $VERSION = "${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch $VERSION https://github.com/assimp/assimp.git assimp-src
+          Set-Location assimp-src
+          Write-Host "Commit: $(git rev-parse HEAD)"
+
+      - name: Configure and build
+        shell: pwsh
+        run: |
+          cmake -B build -S assimp-src `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DASSIMP_BUILD_ASSIMP_TOOLS=ON `
+            -DASSIMP_BUILD_TESTS=OFF `
+            -DASSIMP_BUILD_ZLIB=ON `
+            -DASSIMP_WARNINGS_AS_ERRORS=OFF
+          cmake --build build --config Release --target assimp_cmd --parallel
+
+      - name: Verify
+        shell: pwsh
+        run: |
+          & build/bin/Release/assimp.exe version
+          & build/bin/Release/assimp.exe listext
+
+      - name: Create zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item build/bin/Release/assimp.exe package/
+          Compress-Archive -Path package/* -DestinationPath assimp-windows-x64.zip
+          Get-Item assimp-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: assimp-windows-x64
+          path: assimp-windows-x64.zip
+
+  build-macos:
+    needs: prepare
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }}
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Clone Assimp source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch "$VERSION" https://github.com/assimp/assimp.git assimp-src
+
+      - name: Configure and build
+        run: |
+          cmake -B build -S assimp-src \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DASSIMP_BUILD_ASSIMP_TOOLS=ON \
+            -DASSIMP_BUILD_TESTS=OFF \
+            -DASSIMP_BUILD_ZLIB=ON \
+            -DASSIMP_WARNINGS_AS_ERRORS=OFF
+          cmake --build build --config Release --target assimp_cmd -j$(sysctl -n hw.ncpu)
+
+      - name: Verify
+        run: |
+          build/bin/assimp version
+          build/bin/assimp listext
+          otool -L build/bin/assimp
+
+      - name: Create zip
+        run: |
+          mkdir -p package
+          cp build/bin/assimp package/
+          chmod +x package/assimp
+          cd package
+          zip -r "../assimp-macos-${{ matrix.arch }}.zip" .
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: assimp-macos-${{ matrix.arch }}
+          path: assimp-macos-${{ matrix.arch }}.zip
+
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone Assimp source
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          git clone --depth 1 --branch "$VERSION" https://github.com/assimp/assimp.git assimp-src
+
+      - name: Configure and build
+        run: |
+          cmake -B build -S assimp-src \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DASSIMP_BUILD_ASSIMP_TOOLS=ON \
+            -DASSIMP_BUILD_TESTS=OFF \
+            -DASSIMP_BUILD_ZLIB=ON \
+            -DASSIMP_WARNINGS_AS_ERRORS=OFF
+          cmake --build build --config Release --target assimp_cmd -j$(nproc)
+
+      - name: Verify
+        run: |
+          build/bin/assimp version
+          build/bin/assimp listext
+          ldd build/bin/assimp || true
+
+      - name: Create tarball
+        run: |
+          mkdir -p package
+          cp build/bin/assimp package/
+          chmod +x package/assimp
+          cd package
+          tar -czf ../assimp-linux-x64.tar.gz .
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: assimp-linux-x64
+          path: assimp-linux-x64.tar.gz

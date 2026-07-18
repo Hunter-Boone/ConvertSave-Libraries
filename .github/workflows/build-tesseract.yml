@@ -1,0 +1,186 @@
+name: Build Tesseract
+
+on:
+  workflow_dispatch:
+    inputs:
+      tesseract-version:
+        description: "Tesseract version tag (e.g., 5.4.1)"
+        required: true
+        default: "5.4.1"
+      tessdata-ref:
+        description: "tessdata_fast ref for language data (e.g., 4.1.0)"
+        required: true
+        default: "4.1.0"
+      release-tag:
+        description: "Release tag name (e.g., tesseract-5.4.1)"
+        required: true
+        default: "tesseract-5.4.1"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tessdata-ref: ${{ steps.version.outputs.tessdata-ref }}
+      release-tag: ${{ steps.version.outputs.release-tag }}
+    steps:
+      - name: Set version info
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.tesseract-version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tessdata-ref=${{ github.event.inputs.tessdata-ref }}" >> $GITHUB_OUTPUT
+          echo "release-tag=${{ github.event.inputs.release-tag }}" >> $GITHUB_OUTPUT
+          echo "Building Tesseract $VERSION"
+
+      - name: Verify tag exists on Tesseract repo
+        run: |
+          VERSION="${{ github.event.inputs.tesseract-version }}"
+          git ls-remote --tags https://github.com/tesseract-ocr/tesseract.git "refs/tags/$VERSION" | grep -q "$VERSION" || {
+            echo "ERROR: Tag $VERSION not found in the Tesseract repository"
+            echo "Browse available tags: https://github.com/tesseract-ocr/tesseract/tags"
+            exit 1
+          }
+          echo "Tag $VERSION exists"
+
+  # All platforms build the tesseract CLI statically through vcpkg's
+  # tesseract port (which builds leptonica and image codecs as static deps)
+  build-windows:
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - name: Install tesseract via vcpkg (static)
+        shell: pwsh
+        run: |
+          vcpkg install tesseract:x64-windows-static
+
+      - name: Locate tesseract CLI
+        shell: pwsh
+        run: |
+          $root = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows-static"
+          Write-Host "=== tools ==="
+          Get-ChildItem -Recurse "$root/tools" | Format-Table FullName
+          $exe = Get-ChildItem -Recurse "$root/tools" -Filter tesseract.exe | Select-Object -First 1
+          if (-not $exe) { throw "tesseract.exe not found in vcpkg tools output" }
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item $exe.FullName package/tesseract.exe
+          # Copy any DLLs sitting beside the tool (static triplet normally has none)
+          Get-ChildItem $exe.Directory -Filter *.dll | Copy-Item -Destination package/
+
+      - name: Fetch language data (tessdata_fast)
+        shell: pwsh
+        run: |
+          $ref = "${{ needs.prepare.outputs.tessdata-ref }}"
+          New-Item -ItemType Directory -Force package/tessdata | Out-Null
+          foreach ($lang in @("eng", "osd")) {
+            Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_fast/raw/$ref/$lang.traineddata" -OutFile "package/tessdata/$lang.traineddata"
+          }
+          Get-ChildItem package/tessdata
+
+      - name: Verify
+        shell: pwsh
+        run: |
+          $env:TESSDATA_PREFIX = "$PWD/package/tessdata"
+          & package/tesseract.exe --version
+          & package/tesseract.exe --list-langs
+
+      - name: Create zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path package/* -DestinationPath tesseract-windows-x64.zip
+          Get-Item tesseract-windows-x64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesseract-windows-x64
+          path: tesseract-windows-x64.zip
+
+  build-macos:
+    needs: prepare
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }}
+    strategy:
+      matrix:
+        arch: [x86_64, arm64]
+    steps:
+      - name: Install tesseract via vcpkg (static)
+        run: |
+          TRIPLET="${{ matrix.arch == 'x86_64' && 'x64-osx' || 'arm64-osx' }}"
+          echo "TRIPLET=$TRIPLET" >> $GITHUB_ENV
+          $VCPKG_INSTALLATION_ROOT/vcpkg install tesseract:$TRIPLET
+
+      - name: Package tesseract CLI and language data
+        run: |
+          ROOT="$VCPKG_INSTALLATION_ROOT/installed/$TRIPLET"
+          find "$ROOT/tools" -name tesseract | head -1
+          EXE=$(find "$ROOT/tools" -name tesseract | head -1)
+          [ -n "$EXE" ] || { echo "tesseract CLI not found"; exit 1; }
+          mkdir -p package/tessdata
+          cp "$EXE" package/tesseract
+          chmod +x package/tesseract
+          REF="${{ needs.prepare.outputs.tessdata-ref }}"
+          for lang in eng osd; do
+            curl -sL "https://github.com/tesseract-ocr/tessdata_fast/raw/$REF/$lang.traineddata" -o "package/tessdata/$lang.traineddata"
+          done
+
+      - name: Verify
+        run: |
+          export TESSDATA_PREFIX="$PWD/package/tessdata"
+          package/tesseract --version
+          package/tesseract --list-langs
+          otool -L package/tesseract
+
+      - name: Create zip
+        run: |
+          cd package
+          zip -r "../tesseract-macos-${{ matrix.arch }}.zip" .
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesseract-macos-${{ matrix.arch }}
+          path: tesseract-macos-${{ matrix.arch }}.zip
+
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install tesseract via vcpkg (static)
+        run: |
+          $VCPKG_INSTALLATION_ROOT/vcpkg install tesseract:x64-linux
+
+      - name: Package tesseract CLI and language data
+        run: |
+          ROOT="$VCPKG_INSTALLATION_ROOT/installed/x64-linux"
+          EXE=$(find "$ROOT/tools" -name tesseract | head -1)
+          [ -n "$EXE" ] || { echo "tesseract CLI not found"; exit 1; }
+          mkdir -p package/tessdata
+          cp "$EXE" package/tesseract
+          chmod +x package/tesseract
+          REF="${{ needs.prepare.outputs.tessdata-ref }}"
+          for lang in eng osd; do
+            curl -sL "https://github.com/tesseract-ocr/tessdata_fast/raw/$REF/$lang.traineddata" -o "package/tessdata/$lang.traineddata"
+          done
+
+      - name: Verify
+        run: |
+          export TESSDATA_PREFIX="$PWD/package/tessdata"
+          package/tesseract --version
+          package/tesseract --list-langs
+          ldd package/tesseract || true
+
+      - name: Create tarball
+        run: |
+          cd package
+          tar -czf ../tesseract-linux-x64.tar.gz .
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesseract-linux-x64
+          path: tesseract-linux-x64.tar.gz
