@@ -68,6 +68,20 @@ ImageMagick runs monthly to check for updates automatically.
 
 ## Using the Builds
 
+### Never overwrite assets the app already pins
+
+ConvertSave pins the SHA-256 of every asset it downloads (`src-tauri/src/downloads.rs`).
+Replacing an asset under an existing tag, including the mutable `latest`,
+`ffmpeg-latest` and `dcmtk-latest` releases, makes the download fail in every shipped
+app. So:
+
+- Every build workflow publishes to the **release tag you enter**. Use a new tag per
+  build (e.g. `imagemagick-7.1.2-3`, `ffmpeg-8.0.1`).
+- The `update-latest` input is **off by default**. Turn it on only when no shipped
+  app pins the current `*-latest` assets, or after a release that repins them.
+- To ship a new build, point the app at the new immutable tag, update its pinned
+  hashes, and release the app.
+
 ### ImageMagick "latest" Release
 
 ```

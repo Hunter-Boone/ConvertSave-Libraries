@@ -3,6 +3,10 @@ name: Build DCMTK
 on:
   workflow_dispatch:
     inputs:
+      update-latest:
+        description: "Also overwrite the mutable *-latest release. ConvertSave pins the sha256 of these assets, so overwriting them breaks downloads in shipped apps. Leave off unless the app is being repinned."
+        type: boolean
+        default: false
       dcmtk-version:
         description: "DCMTK version tag (e.g., DCMTK-3.7.0)"
         required: true
@@ -202,7 +206,7 @@ jobs:
           ls -lh dcmtk-macos-${{ matrix.arch }}.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dcmtk-macos-${{ matrix.arch }}
           path: dcmtk-macos-${{ matrix.arch }}.zip
@@ -276,7 +280,7 @@ jobs:
           Get-Item dcmtk-windows-x64.zip
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dcmtk-windows-x64
           path: dcmtk-windows-x64.zip
@@ -354,7 +358,7 @@ jobs:
           ls -lh dcmtk-linux-x64.tar.gz
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dcmtk-linux-x64
           path: dcmtk-linux-x64.tar.gz
@@ -365,7 +369,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
 
@@ -373,7 +377,7 @@ jobs:
         run: ls -R artifacts
 
       - name: Create versioned release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ needs.prepare.outputs.release-tag }}
           name: DCMTK ${{ needs.prepare.outputs.version }}
@@ -409,7 +413,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update 'dcmtk-latest' release
-        uses: softprops/action-gh-release@v1
+        if: ${{ inputs.update-latest }}
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: dcmtk-latest
           name: Latest DCMTK Build

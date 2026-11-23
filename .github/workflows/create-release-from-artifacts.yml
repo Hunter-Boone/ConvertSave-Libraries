@@ -26,7 +26,7 @@ jobs:
     
     steps:
       - name: Download artifacts from specified run
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           run-id: ${{ inputs.run-id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -90,7 +90,7 @@ jobs:
           ls -lh artifacts/*.tar.gz
 
       - name: Create/Update Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ inputs.tag-name }}
           name: ${{ inputs.release-name }}
