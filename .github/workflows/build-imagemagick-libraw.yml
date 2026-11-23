@@ -3,6 +3,13 @@ name: Build ImageMagick with libraw
 on:
   workflow_dispatch:
     inputs:
+      release-tag:
+        description: "Immutable release tag to publish (e.g. imagemagick-7.1.1-47)"
+        required: true
+      update-latest:
+        description: "Also overwrite the mutable *-latest release. ConvertSave pins the sha256 of these assets, so overwriting them breaks downloads in shipped apps. Leave off unless the app is being repinned."
+        type: boolean
+        default: false
       imagemagick-version:
         description: "ImageMagick version to build (e.g., 7.1.1-47, 7.1.1-48)"
         required: true
@@ -290,7 +297,7 @@ jobs:
           tar -tzf imagemagick-macos-x86_64.tar.gz | head -20
 
       - name: Upload ImageMagick artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: imagemagick-macos-x86_64
           path: imagemagick-macos-x86_64.tar.gz
@@ -484,7 +491,7 @@ jobs:
           tar -tzf imagemagick-macos-arm64.tar.gz | head -20
 
       - name: Upload ImageMagick artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: imagemagick-macos-arm64
           path: imagemagick-macos-arm64.tar.gz
@@ -496,12 +503,25 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
 
+      - name: Create versioned release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ inputs.release-tag }}
+          name: ImageMagick (libraw) ${{ inputs.release-tag }}
+          files: |
+            artifacts/**/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Update 'latest' release
-        uses: softprops/action-gh-release@v1
+        if: ${{ inputs.update-latest }}
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: latest
           name: Latest ImageMagick Build

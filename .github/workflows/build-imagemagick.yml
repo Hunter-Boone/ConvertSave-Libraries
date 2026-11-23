@@ -3,6 +3,10 @@ name: Build ImageMagick
 on:
   workflow_dispatch:
     inputs:
+      update-latest:
+        description: "Also overwrite the mutable *-latest release. ConvertSave pins the sha256 of these assets, so overwriting them breaks downloads in shipped apps. Leave off unless the app is being repinned."
+        type: boolean
+        default: false
       imagemagick-version:
         description: "ImageMagick version to build (e.g., 7.1.1-47)"
         required: true
@@ -10,9 +14,6 @@ on:
       release-tag:
         description: "Release tag name (e.g., v1.0.0)"
         required: true
-  schedule:
-    # Run monthly to check for updates
-    - cron: "0 0 1 * *"
 
 permissions:
   contents: write # Required to create releases and upload assets
@@ -66,14 +67,14 @@ jobs:
 
   build-macos:
     needs: prepare
-    # Use macos-13 for Intel, macos-14 for ARM (matches How to Convert setup)
-    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-14' }}
+    # macos-13/14 runners are retired; 15-intel for Intel, 15 for ARM
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-15-intel' || 'macos-15' }}
     strategy:
       matrix:
         arch: [x86_64, arm64]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install dependencies
         run: |
@@ -373,7 +374,7 @@ jobs:
           tar czf ../../imagemagick-macos-${{ matrix.arch }}.tar.gz .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: imagemagick-macos-${{ matrix.arch }}
           path: imagemagick-macos-${{ matrix.arch }}.tar.gz
@@ -391,7 +392,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install dependencies
         run: |
@@ -488,7 +489,7 @@ jobs:
           tar czf ../imagemagick-linux-x64.tar.gz .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: imagemagick-linux-x64
           path: imagemagick-linux-x64.tar.gz
@@ -499,7 +500,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
 
@@ -517,7 +518,7 @@ jobs:
           # Files are already named correctly: imagemagick-macos-{arch}.tar.gz
 
       - name: Create versioned release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ needs.prepare.outputs.release-tag }}
           name: ImageMagick ${{ needs.prepare.outputs.version }}
@@ -554,7 +555,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update 'latest' release
-        uses: softprops/action-gh-release@v1
+        if: ${{ inputs.update-latest }}
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: latest
           name: Latest ImageMagick Build
